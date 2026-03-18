@@ -1,0 +1,455 @@
+{
+  "_schema_version": "1.0",
+  "_notes": [
+    "Each entry has a unique qid, a query_type (1–4), and a list of source_chunks",
+    "that must be retrieved for the answer to be considered grounded.",
+    "expected_answer is the canonical string for Type 1–3 (exact or near-exact match).",
+    "For Type 4 (synthetic), expected_answer is null and answer_rubric defines",
+    "the list of concepts a good answer must cover.",
+    "difficulty: easy | medium | hard — used to slice eval results.",
+  ],
+
+  "questions": [
+
+    {
+      "qid": "T1_001",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "question": "Total Expense Ratio of the iShares Core MSCI World UCITS ETF (IE00B4L5Y983)?",
+      "expected_answer": "0.20%",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts",
+          "note": "Total Expense Ratio in Product Information table"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T1_002",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "question": "What index does the UBS Core MSCI World UCITS ETF (IE00BD4TXV59) track?",
+      "expected_answer": "MSCI World Total Return Net",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts",
+          "note": "Index name in Index Description table"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00BD4TXV59", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T1_003",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "question": "What is the ISIN of the iShares Core MSCI World UCITS ETF?",
+      "expected_answer": "IE00B4L5Y983",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts",
+          "note": "ISIN field in Product Information table"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983"}
+    },
+
+    {
+      "qid": "T1_004",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "medium",
+      "question": "What is the Summary Risk Indicator (SRI) of the IE00B4L5Y983 KID?",
+      "expected_answer": "4",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "Risk indicator",
+          "note": "Risk indicator value on the 1–7 scale"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"}
+    },
+
+    {
+      "qid": "T1_005",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "medium",
+      "question": "What is the recommended holding period stated in the IE00B4L5Y983 KID?",
+      "expected_answer": "5 years",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "Recommended holding period",
+          "note": "Recommended holding period"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"}
+    },
+
+    {
+      "qid": "T1_006",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "medium",
+      "question": "What replication method does the iShares Core MSCI World ETF use?",
+      "expected_answer": "Physical",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts",
+          "note": "Key Facts table, product structure field"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T1_007",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "hard",
+      "question": "What are the ongoing costs for IE00B4L5Y983 as stated in the KID?",
+      "expected_answer": "0.2%",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "What are the costs",
+          "note": "Ongoing costs taken each year table, Management fees and other administrative or operating costs row"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"},
+      "note": "Hard because the answer lives in a table chunk, not plain text"
+    },
+
+    {
+      "qid": "T2_001",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "easy",
+      "question": "Which ETF has a lower ongoing charge: IE00B4L5Y983 (iShares Core MSCI World) or IE00BD4TXV59 (UBS Core MSCI World)?",
+      "expected_answer": "IE00BD4TXV59 at 0.06% vs IE00B4L5Y983 at 0.20%",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "Product Information table, Total Expense Ratio row"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "Fund description, TER (flat fee) row"
+        }
+      ],
+      "metadata_filter_hint": {"category": "MSCI World", "doc_type": "factsheet"},
+      "note": "Classic same-index cross-issuer comparison — core test for comparative retrieval"
+    },
+
+    {
+      "qid": "T2_002",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "question": "Compare the replication methods of IE00B4L5Y983 and IE00BD4TXV59.",
+      "expected_answer": "IE00B4L5Y983 uses Physical (Optimised); IE00BD4TXV59 uses Physical (Full replicated)",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "Table key facts, methodology and product structure fields"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "Fund description, Replication methodology row"
+        }
+      ],
+      "metadata_filter_hint": {"category": "MSCI World", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T2_003",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "question": "Do the KIDs for IE00B4L5Y983 and IE00BD4TXV59 assign the same Summary Risk Indicator?",
+      "expected_answer": "Yes, both are rated 4 out of 7",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the risks and what could i get in return"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the risks and what could i get in return"
+        }
+      ],
+      "metadata_filter_hint": {"category": "MSCI World", "doc_type": "kid"}
+    },
+
+    {
+      "qid": "T2_004",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "hard",
+      "question": "Compare the total cost breakdown (entry, ongoing, exit) for IE00B4L5Y983 and IE00BD4TXV59 as reported in their KIDs.",
+      "expected_answer": "For IE00B4L5Y983 the Composition of Costs is the following, entry costs and exit costs are 0%, no fees are charged at entry and exit. Ongoing costs taken each year are: 1) 0.20% of the value of the investment per year as management fees and other administrative or operating costs, 2) 0.00% of the value of the investment per year as transaction fees. For IE00BD4TXV59 the Composition of Costs is the following, entry costs and exit costs are 0%, no fees are charged at entry and exit. Ongoing costs taken each year are: 1) 0.10% of the value of the investment per year as management fees and other administrative or operating costs, 2) 0.00% of the value of the investment per year as performance fees.",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the costs"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "Composition of costs"
+        }
+      ],
+      "metadata_filter_hint": {"category": "MSCI World", "doc_type": "kid"},
+      "note": "Hard: answer requires joining two table chunks from two different documents"
+    },
+
+{
+      "qid": "T3_001",
+          "query_type": 3,
+      "query_type_label": "temporal",
+      "difficulty": "medium",
+      "question": "How did the AUM of IE00B4L5Y983 change between 2021 and 2023?",
+      "expected_answer": "<FILL: e.g. AUM grew from X in 2021 to Y in 2023>",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2021,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        },
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T3_002",
+      "query_type": 3,
+      "query_type_label": "temporal",
+      "difficulty": "medium",
+      "question": "Did the ongoing charge for IE00B4L5Y983 change between 2021 and 2023?",
+      "expected_answer": "<FILL: e.g. No, it remained at 0.20% across all three years>",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2021,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        },
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2022,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        },
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"},
+      "note": "Tests whether the system can correctly attribute the same value to three different years"
+    },
+
+    {
+      "qid": "T3_003",
+      "query_type": 3,
+      "query_type_label": "temporal",
+      "difficulty": "hard",
+      "question": "How has the risk description in IE00B4L5Y983's KID changed between 2021 and 2023?",
+      "expected_answer": "<FILL: describe any changes in the risk section prose>",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2021,
+          "doc_type": "kid",
+          "section_heading": "what are the risks and what could i get in return"
+        },
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the risks and what could i get in return"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"},
+      "note": "Hard: requires detecting subtle wording changes in regulatory prose across years"
+    },
+
+    {
+      "qid": "T3_004",
+      "query_type": 3,
+      "query_type_label": "temporal",
+      "difficulty": "hard",
+      "question": "Did IE00BD4TXV59's number of holdings change significantly from 2021 to 2023?",
+      "expected_answer": "<FILL: e.g. Holdings increased from ~1500 to ~1600>",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2021,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00BD4TXV59", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T4_001",
+      "query_type": 4,
+      "query_type_label": "synthetic",
+      "difficulty": "hard",
+      "question": "Based on the available documents, which of these two ETFs — IE00B4L5Y983 or IE00BD4TXV59 — would be more suitable for a cost-sensitive long-term investor, and why?",
+      "expected_answer": null,
+      "answer_rubric": {
+        "must_mention": [
+          "ongoing charge / OCF for both ETFs with correct figures",
+          "replication method for both ETFs",
+          "recommended holding period from KID",
+          "correct source attribution (isin + doc_type + year) for each claim"
+        ],
+        "should_mention": [
+          "AUM or fund size as proxy for liquidity/stability",
+          "tracking difference if available",
+          "any cost differences beyond OCF (transaction costs from KID)"
+        ],
+        "must_not_contain": [
+          "figures not present in the source documents",
+          "a recommendation unsupported by cited evidence"
+        ]
+      },
+      "sources": [
+        {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet", "year": 2026},
+        {"etf_isin": "IE00B4L5Y983", "doc_type": "kid",       "year": 2026},
+        {"etf_isin": "IE00BD4TXV59", "doc_type": "factsheet", "year": 2026},
+        {"etf_isin": "IE00BD4TXV59", "doc_type": "kid",       "year": 2026}
+      ],
+      "metadata_filter_hint": {"category": "MSCI World"}
+    },
+
+    {
+      "qid": "T4_002",
+      "query_type": 4,
+      "query_type_label": "synthetic",
+      "difficulty": "hard",
+      "question": "Summarise the key differences between the iShares and UBS MSCI World ETFs across cost, replication, and risk profile.",
+      "expected_answer": null,
+      "answer_rubric": {
+        "must_mention": [
+          "OCF / ongoing charge comparison with figures",
+          "replication method for both",
+          "SRI score from KID for both",
+          "source attribution for every factual claim"
+        ],
+        "should_mention": [
+          "domicile of each fund",
+          "distribution policy (acc/dist)",
+          "AUM difference"
+        ],
+        "must_not_contain": [
+          "hallucinated figures",
+          "claims attributed to wrong ETF"
+        ]
+      },
+      "sources": [
+        {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet", "year": 2026},
+        {"etf_isin": "IE00B4L5Y983", "doc_type": "kid",       "year": 2026},
+        {"etf_isin": "IE00BD4TXV59", "doc_type": "factsheet", "year": 2026},
+        {"etf_isin": "IE00BD4TXV59", "doc_type": "kid",       "year": 2026}
+      ],
+      "metadata_filter_hint": {"category": "MSCI World"}
+    }
+  ]
+}
