@@ -1,0 +1,42 @@
+{
+  "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
+    "ticker": "EUNL",
+    "issuer": "ishares",
+    "category": "MSCI World",
+    "type": "factsheet",
+    "currency": "USD",
+    "share_class": "acc",
+    "year": 2023,
+    "quarter": "Q4"
+  },
+  "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
+    "ticker": "EUNL",
+    "issuer": "ishares",
+    "category": "MSCI World",
+    "type": "kid",
+    "currency": "USD",
+    "share_class": "acc",
+    "year": 2023,
+    "quarter": null
+  },
+  "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
+    "ticker": "UETW",
+    "issuer": "ubs",
+    "category": "MSCI World",
+    "type": "factsheet",
+    "currency": "USD",
+    "share_class": "acc",
+    "year": 2023,
+    "quarter": "Q4"
+  },
+  "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
+    "ticker": "UETW",
+    "issuer": "ubs",
+    "category": "MSCI World",
+    "type": "kid",
+    "currency": "USD",
+    "share_class": "acc",
+    "year": 2023,
+    "quarter": null
+  }
+}
