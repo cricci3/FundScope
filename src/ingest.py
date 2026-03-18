@@ -13,7 +13,7 @@ the same output schema (list of Chunk objects).
 Usage:
     # Single file (type inferred from --type flag)
     python ingest.py --pdf data/raw/iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf \
-                     --ticker EUNL --issuer ishares --category "MSCI World" \
+                     --isin EUNL --issuer ishares --category "MSCI World" \
                      --year 2023 --type kid --currency USD --share_class acc
 
     # Batch with config JSON (recommended)
@@ -79,7 +79,7 @@ class KeyFacts:
 
 @dataclass
 class DocumentMetadata:
-    etf_ticker: str
+    etf_isin: str
     issuer: str
     category: str
     year: int
@@ -394,7 +394,7 @@ def deduplicate_chunks(chunks: list[Chunk]) -> list[Chunk]:
 # ── Chunk ID helper ────────────────────────────────────────────────────────────
 
 def make_chunk_id(metadata: DocumentMetadata, prefix: str, text: str) -> str:
-    key = f"{metadata.etf_ticker}_{metadata.year}_{prefix}_{text[:80]}"
+    key = f"{metadata.etf_isin}_{metadata.year}_{prefix}_{text[:80]}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
@@ -490,7 +490,7 @@ def build_key_facts_chunk(metadata: DocumentMetadata) -> Chunk:
     """
     kf = metadata.key_facts
     lines = [
-        f"ETF: {metadata.etf_ticker}",
+        f"ETF: {metadata.etf_isin}",
         f"Issuer: {metadata.issuer}",
         f"Category: {metadata.category}",
         f"Document type: {metadata.doc_type}",
@@ -654,7 +654,7 @@ def load_config(config_path: Path) -> dict:
 
 def metadata_from_config_entry(entry: dict, filename: str) -> DocumentMetadata:
     return DocumentMetadata(
-        etf_ticker=entry["ticker"].upper(),
+        etf_isin=entry["isin"].upper(),
         issuer=entry["issuer"].lower(),
         category=entry["category"],
         year=int(entry["year"]),
@@ -669,7 +669,7 @@ def metadata_from_config_entry(entry: dict, filename: str) -> DocumentMetadata:
 # ── Output filename ────────────────────────────────────────────────────────────
 
 def build_output_stem(meta: DocumentMetadata) -> str:
-    parts = [meta.etf_ticker, str(meta.year)]
+    parts = [meta.etf_isin, str(meta.year)]
     if meta.quarter:
         parts.append(meta.quarter)
     parts.append(meta.doc_type)
@@ -686,7 +686,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--pdf",   type=Path, help="Single PDF to process")
     g.add_argument("--batch", type=Path, help="Folder of PDFs to process")
 
-    p.add_argument("--ticker",      help="ETF ticker, e.g. EUNL")
+    p.add_argument("--isin",      help="ETF isin, e.g. EUNL")
     p.add_argument("--issuer",      choices=list(SUPPORTED_ISSUERS))
     p.add_argument("--category",    help="e.g. 'MSCI World'")
     p.add_argument("--year",        type=int)
@@ -708,7 +708,7 @@ def main():
 
     if args.pdf:
         meta = DocumentMetadata(
-            etf_ticker=args.ticker.upper(),
+            etf_isin=args.isin.upper(),
             issuer=args.issuer.lower(),
             category=args.category,
             year=args.year,

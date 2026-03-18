@@ -1,6 +1,6 @@
 {
   "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
-    "ticker": "EUNL",
+    "isin": "IE00B4L5Y983",
     "issuer": "ishares",
     "category": "MSCI World",
     "type": "factsheet",
@@ -10,7 +10,7 @@
     "quarter": "Q4"
   },
   "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
-    "ticker": "EUNL",
+    "isin": "IE00B4L5Y983",
     "issuer": "ishares",
     "category": "MSCI World",
     "type": "kid",
@@ -20,7 +20,7 @@
     "quarter": null
   },
   "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
-    "ticker": "UETW",
+    "isin": "IE00BD4TXV59",
     "issuer": "ubs",
     "category": "MSCI World",
     "type": "factsheet",
@@ -30,7 +30,7 @@
     "quarter": "Q4"
   },
   "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
-    "ticker": "UETW",
+    "isin": "IE00BD4TXV59",
     "issuer": "ubs",
     "category": "MSCI World",
     "type": "kid",
