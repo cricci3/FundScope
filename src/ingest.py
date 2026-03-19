@@ -11,13 +11,16 @@ KIDs and factsheets go through separate extraction paths that share
 the same output schema (list of Chunk objects).
 
 Usage:
+
+    python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
+
     # Single file (type inferred from --type flag)
-    python ingest.py --pdf data/raw/iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf \
+    python src/ingest.py --pdf data/raw/iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf \
                      --isin EUNL --issuer ishares --category "MSCI World" \
                      --year 2023 --type kid --currency USD --share_class acc
 
     # Batch with config JSON (recommended)
-    python ingest.py --batch data/raw/ --config metadata.json --output_dir data/processed/
+    python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
 """
 
 import re
@@ -632,7 +635,7 @@ def save_chunks(chunks: list[Chunk], output_path: Path) -> None:
         }
         for c in chunks
     ]
-    output_path.write_text(json.dumps(records, indent=2, ensure_ascii=False))
+    output_path.write_text(json.dumps(records, indent=2, ensure_ascii=True), encoding="utf-8")
     print(f"  Saved → {output_path}")
 
 
