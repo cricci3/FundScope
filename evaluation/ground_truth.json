@@ -7,6 +7,8 @@
     "For Type 4 (synthetic), expected_answer is null and answer_rubric defines",
     "the list of concepts a good answer must cover.",
     "difficulty: easy | medium | hard — used to slice eval results.",
+    "Type 3 (temporal) is parked — requires multi-year corpus (Phase 2).",
+    "T2_006–T2_009 replace T3_001–T3_004: cross-document-type queries (factsheet vs KID, same ETF and year)."
   ],
 
   "questions": [
@@ -269,121 +271,116 @@
       "note": "Hard: answer requires joining two table chunks from two different documents"
     },
 
-{
-      "qid": "T3_001",
-          "query_type": 3,
-      "query_type_label": "temporal",
+    {
+      "qid": "T2_006",
+      "query_type": 2,
+      "query_type_label": "comparative",
       "difficulty": "medium",
-      "question": "How did the AUM of IE00B4L5Y983 change between 2021 and 2023?",
-      "expected_answer": "<FILL: e.g. AUM grew from X in 2021 to Y in 2023>",
+      "question": "The iShares Core MSCI World ETF (IE00B4L5Y983) factsheet reports an ongoing charge. Does the KID for the same fund report a consistent ongoing cost figure?",
+      "expected_answer": "Yes, both report 0.20% — factsheet as Total Expense Ratio, KID as Annual cost impact or ongoing costs taken each year in What are the costs section.",
       "answer_rubric": null,
       "sources": [
-        {
-          "etf_isin": "IE00B4L5Y983",
-          "issuer": "ishares",
-          "year": 2021,
-          "doc_type": "factsheet",
-          "section_heading": "key facts"
-        },
         {
           "etf_isin": "IE00B4L5Y983",
           "issuer": "ishares",
           "year": 2026,
           "doc_type": "factsheet",
           "section_heading": "key facts"
-        }
-      ],
-      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
-    },
-
-    {
-      "qid": "T3_002",
-      "query_type": 3,
-      "query_type_label": "temporal",
-      "difficulty": "medium",
-      "question": "Did the ongoing charge for IE00B4L5Y983 change between 2021 and 2023?",
-      "expected_answer": "<FILL: e.g. No, it remained at 0.20% across all three years>",
-      "answer_rubric": null,
-      "sources": [
-        {
-          "etf_isin": "IE00B4L5Y983",
-          "issuer": "ishares",
-          "year": 2021,
-          "doc_type": "factsheet",
-          "section_heading": "key facts"
-        },
-        {
-          "etf_isin": "IE00B4L5Y983",
-          "issuer": "ishares",
-          "year": 2022,
-          "doc_type": "factsheet",
-          "section_heading": "key facts"
-        },
-        {
-          "etf_isin": "IE00B4L5Y983",
-          "issuer": "ishares",
-          "year": 2026,
-          "doc_type": "factsheet",
-          "section_heading": "key facts"
-        }
-      ],
-      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"},
-      "note": "Tests whether the system can correctly attribute the same value to three different years"
-    },
-
-    {
-      "qid": "T3_003",
-      "query_type": 3,
-      "query_type_label": "temporal",
-      "difficulty": "hard",
-      "question": "How has the risk description in IE00B4L5Y983's KID changed between 2021 and 2023?",
-      "expected_answer": "<FILL: describe any changes in the risk section prose>",
-      "answer_rubric": null,
-      "sources": [
-        {
-          "etf_isin": "IE00B4L5Y983",
-          "issuer": "ishares",
-          "year": 2021,
-          "doc_type": "kid",
-          "section_heading": "what are the risks and what could i get in return"
         },
         {
           "etf_isin": "IE00B4L5Y983",
           "issuer": "ishares",
           "year": 2026,
           "doc_type": "kid",
-          "section_heading": "what are the risks and what could i get in return"
+          "section_heading": "what are the costs"
         }
       ],
-      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"},
-      "note": "Hard: requires detecting subtle wording changes in regulatory prose across years"
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983"},
+      "note": "Tests cross-document consistency for the same ETF. Also a sanity check on extraction: if the two figures differ, it is likely a parsing error not a real discrepancy."
     },
 
     {
-      "qid": "T3_004",
-      "query_type": 3,
-      "query_type_label": "temporal",
+      "qid": "T2_007",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "question": "What replication method does IE00B4L5Y983 use according to its factsheet, and does the KID description of the product mention the same approach?",
+      "expected_answer": "Factsheet states Physical (with Optimised methodology) product structure; KID instead does not describe the fund structure in replication terms.",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        },
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what is this product"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983"},
+      "note": "Medium: the KID rarely uses the word 'replication' — the system must interpret equivalent prose."
+    },
+
+    {
+      "qid": "T2_008",
+      "query_type": 2,
+      "query_type_label": "comparative",
       "difficulty": "hard",
-      "question": "Did IE00BD4TXV59's number of holdings change significantly from 2021 to 2023?",
-      "expected_answer": "<FILL: e.g. Holdings increased from ~1500 to ~1600>",
+      "question": "The UBS Core MSCI World ETF (IE00BD4TXV59) KID describes performance scenarios. Does the factsheet's performance section tell a consistent story about expected returns?",
+      "expected_answer": "The KID performance scenarios are forward-looking, model-based projections under the PRIIPs framework, while the factsheet shows realised historical returns. These are not directly comparable. Although the historical returns fall within the broad range of outcomes shown in the KID, this does not imply consistency, as the central scenario represents a modelled median outcome rather than an annualised expectation derived from past performance.",
       "answer_rubric": null,
       "sources": [
         {
           "etf_isin": "IE00BD4TXV59",
           "issuer": "ubs",
-          "year": 2021,
+          "year": 2026,
           "doc_type": "factsheet",
-          "section_heading": "key facts"
+          "section_heading": "performance"
         },
         {
           "etf_isin": "IE00BD4TXV59",
           "issuer": "ubs",
           "year": 2026,
-          "doc_type": "factsheet",
-          "section_heading": "key facts"
+          "doc_type": "kid",
+          "section_heading": "performance scenarios"
         }
       ],
-      "metadata_filter_hint": {"etf_isin": "IE00BD4TXV59", "doc_type": "factsheet"}
+      "metadata_filter_hint": {"etf_isin": "IE00BD4TXV59"},
+      "note": "Hard: requires joining a scenario table chunk (KID) with a performance chart narrative (factsheet). Direct test of table block_type chunk retrieval."
+    },
+
+    {
+      "qid": "T2_009",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "hard",
+      "question": "Compare how IE00B4L5Y983 (iShares) and IE00BD4TXV59 (UBS) each describe their target investor in their respective KIDs.",
+      "expected_answer": "Based on KIDs, both Funds are intended for retail investors with the ability to bear losses.",
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "Intended retail investor"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "Intended retail investor"
+        }
+      ],
+      "metadata_filter_hint": {"doc_type": "kid", "category": "MSCI World"},
+      "note": "Hard: target market description is prose-heavy and often spans multiple sentences. Tests whether 400-char KID chunks preserve enough context."
     },
 
     {
@@ -451,5 +448,65 @@
       ],
       "metadata_filter_hint": {"category": "MSCI World"}
     }
-  ]
+  ],
+
+  "_parked_type3": {
+    "_status": "parked — requires multi-year corpus (Phase 2)",
+    "_reactivate_when": "Download factsheets and KIDs for 2021 and 2022",
+    "questions": [
+      {
+        "qid": "T3_001",
+        "query_type": 3,
+        "query_type_label": "temporal",
+        "difficulty": "medium",
+        "question": "How did the AUM of IE00B4L5Y983 change between 2021 and 2023?",
+        "expected_answer": "<FILL once multi-year data is available>",
+        "sources": [
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2021, "doc_type": "factsheet", "section_heading": "key facts"},
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2023, "doc_type": "factsheet", "section_heading": "key facts"}
+        ],
+        "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
+      },
+      {
+        "qid": "T3_002",
+        "query_type": 3,
+        "query_type_label": "temporal",
+        "difficulty": "medium",
+        "question": "Did the ongoing charge for IE00B4L5Y983 change between 2021 and 2023?",
+        "expected_answer": "<FILL once multi-year data is available>",
+        "sources": [
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2021, "doc_type": "factsheet", "section_heading": "key facts"},
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2022, "doc_type": "factsheet", "section_heading": "key facts"},
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2023, "doc_type": "factsheet", "section_heading": "key facts"}
+        ],
+        "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
+      },
+      {
+        "qid": "T3_003",
+        "query_type": 3,
+        "query_type_label": "temporal",
+        "difficulty": "hard",
+        "question": "How has the risk description in IE00B4L5Y983's KID changed between 2021 and 2023?",
+        "expected_answer": "<FILL once multi-year data is available>",
+        "sources": [
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2021, "doc_type": "kid", "section_heading": "what are the risks and what could i get in return"},
+          {"etf_isin": "IE00B4L5Y983", "issuer": "ishares", "year": 2023, "doc_type": "kid", "section_heading": "what are the risks and what could i get in return"}
+        ],
+        "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"}
+      },
+      {
+        "qid": "T3_004",
+        "query_type": 3,
+        "query_type_label": "temporal",
+        "difficulty": "hard",
+        "question": "Did IE00BD4TXV59's number of holdings change significantly from 2021 to 2023?",
+        "expected_answer": "<FILL once multi-year data is available>",
+        "sources": [
+          {"etf_isin": "IE00BD4TXV59", "issuer": "ubs", "year": 2021, "doc_type": "factsheet", "section_heading": "key facts"},
+          {"etf_isin": "IE00BD4TXV59", "issuer": "ubs", "year": 2023, "doc_type": "factsheet", "section_heading": "key facts"}
+        ],
+        "metadata_filter_hint": {"etf_isin": "IE00BD4TXV59", "doc_type": "factsheet"}
+      }
+    ]
+  }
 }

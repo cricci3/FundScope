@@ -3,35 +3,42 @@ evaluate.py — Evaluation scaffold for the ETF RAG pipeline
 ETF RAG Project — Phase 5
 
 Measures three things independently:
-  1. Retrieval quality  — are the right chunks retrieved?
-  2. Answer faithfulness — does the answer contradict the source chunks?
+  1. Retrieval quality    — are the right chunks retrieved?
+  2. Answer faithfulness  — does the answer contradict the source chunks?
   3. Attribution accuracy — are sources correctly cited?
 
-Each metric can be run standalone. The full eval loop runs all three.
+Identifier note: ground truth uses etf_isin (e.g. "IE00B4L5Y983") as the
+primary ETF identifier. source_matches_chunk() matches on (etf_isin, doc_type, year).
 
 Usage:
-    # Full evaluation against ground truth
+    # Full evaluation
     python evaluate.py --ground_truth evaluation/ground_truth.json \
                        --pipeline_output evaluation/pipeline_output.json \
                        --report evaluation/report.json
 
-    # Retrieval-only (useful during Phase 3 before generation is wired up)
+    # Retrieval-only (before generation is wired up)
     python evaluate.py --ground_truth evaluation/ground_truth.json \
                        --pipeline_output evaluation/pipeline_output.json \
                        --retrieval_only
 
-Pipeline output format (one entry per question):
+Pipeline output format — one entry per question:
     [
       {
         "qid": "T1_001",
         "question": "...",
         "retrieved_chunks": [
-          {"chunk_id": "...", "etf_ticker": "EUNL", "doc_type": "factsheet",
-           "year": 2023, "section_heading": "key facts", "text": "..."}
+          {
+            "chunk_id": "...",
+            "etf_isin": "IE00B4L5Y983",
+            "doc_type": "factsheet",
+            "year": 2026,
+            "section_heading": "key facts",
+            "text": "..."
+          }
         ],
-        "generated_answer": "The ongoing charge for EUNL is 0.20%.",
+        "generated_answer": "The TER of IE00B4L5Y983 is 0.20%.",
         "cited_sources": [
-          {"etf_ticker": "EUNL", "doc_type": "factsheet", "year": 2023}
+          {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet", "year": 2026}
         ]
       },
       ...
@@ -51,27 +58,27 @@ from typing import Optional
 class RetrievalResult:
     qid: str
     query_type: int
-    precision_at_k: float       # fraction of retrieved chunks that are relevant
-    recall_at_k: float          # fraction of required sources that were retrieved
-    any_relevant_retrieved: bool  # loose pass/fail
+    precision_at_k: float
+    recall_at_k: float
+    any_relevant_retrieved: bool
 
 
 @dataclass
 class FaithfulnessResult:
     qid: str
     query_type: int
-    answer_contains_expected: Optional[bool]  # None for Type 4 (rubric-based)
-    rubric_scores: Optional[dict]             # for Type 4 only
-    has_unsupported_claims: bool              # True if answer goes beyond retrieved chunks
+    answer_contains_expected: Optional[bool]  # None for Type 4
+    rubric_scores: Optional[dict]             # Type 4 only
+    has_unsupported_claims: bool
 
 
 @dataclass
 class AttributionResult:
     qid: str
     query_type: int
-    correct_sources_cited: bool    # all required sources present in cited_sources
-    wrong_sources_cited: bool      # any cited source doesn't match ground truth
-    attribution_score: float       # 0.0–1.0
+    correct_sources_cited: bool
+    wrong_sources_cited: bool
+    attribution_score: float
 
 
 @dataclass
@@ -85,43 +92,59 @@ class QuestionEval:
     attribution: AttributionResult
 
 
-# ── Retrieval evaluation ───────────────────────────────────────────────────────
+# ── Source matching ────────────────────────────────────────────────────────────
+
+def _get(obj: dict, *keys: str, default="") -> str:
+    """
+    Try multiple key names in order, return the first match as a string.
+    Handles both flat chunk dicts and nested {"metadata": {...}} dicts.
+    """
+    for key in keys:
+        val = obj.get(key)
+        if val is not None:
+            return str(val)
+    # Also check inside a nested "metadata" sub-dict (from ingest.py output)
+    meta = obj.get("metadata", {})
+    for key in keys:
+        val = meta.get(key)
+        if val is not None:
+            return str(val)
+    return default
+
 
 def source_matches_chunk(source: dict, chunk: dict) -> bool:
     """
-    Check if a ground-truth source specification matches a retrieved chunk.
-    Matching is on (etf_ticker, doc_type, year) — section_heading is a soft hint,
-    not a hard requirement, because retrieval may surface the right content
-    from an adjacent chunk.
+    Check if a ground-truth source spec matches a retrieved chunk.
+    Primary identifier: etf_isin.
+    Hard match on (etf_isin, doc_type, year).
+    section_heading is informational only — not matched here.
     """
-    ticker_match = (
-        source.get("etf_ticker", "").upper() ==
-        chunk.get("etf_ticker", chunk.get("metadata", {}).get("etf_ticker", "")).upper()
+    isin_match = (
+        source.get("etf_isin", "").upper() ==
+        _get(chunk, "etf_isin").upper()
     )
     doc_type_match = (
         source.get("doc_type", "") ==
-        chunk.get("doc_type", chunk.get("metadata", {}).get("doc_type", ""))
+        _get(chunk, "doc_type")
     )
     year_match = (
-        int(source.get("year", 0)) ==
-        int(chunk.get("year", chunk.get("metadata", {}).get("year", 0)))
+        str(source.get("year", "")) ==
+        str(_get(chunk, "year"))
     )
-    return ticker_match and doc_type_match and year_match
+    return isin_match and doc_type_match and year_match
 
+
+# ── Retrieval evaluation ───────────────────────────────────────────────────────
 
 def evaluate_retrieval(question: dict, pipeline_entry: dict) -> RetrievalResult:
     """
-    Precision@k and Recall@k against ground truth sources.
-
     Precision@k = |retrieved ∩ relevant| / |retrieved|
-    Recall@k    = |retrieved ∩ relevant| / |required sources|
-
-    A retrieved chunk is "relevant" if it matches any required source.
+    Recall@k    = |required sources covered| / |required sources|
     """
-    required_sources = question.get("sources", [])
-    retrieved_chunks = pipeline_entry.get("retrieved_chunks", [])
+    required  = question.get("sources", [])
+    retrieved = pipeline_entry.get("retrieved_chunks", [])
 
-    if not retrieved_chunks:
+    if not retrieved:
         return RetrievalResult(
             qid=question["qid"],
             query_type=question["query_type"],
@@ -130,20 +153,17 @@ def evaluate_retrieval(question: dict, pipeline_entry: dict) -> RetrievalResult:
             any_relevant_retrieved=False,
         )
 
-    # For each retrieved chunk, check if it matches any required source
     relevant_retrieved = [
-        chunk for chunk in retrieved_chunks
-        if any(source_matches_chunk(src, chunk) for src in required_sources)
+        c for c in retrieved
+        if any(source_matches_chunk(s, c) for s in required)
     ]
-
-    # For each required source, check if at least one retrieved chunk matches
     covered_sources = [
-        src for src in required_sources
-        if any(source_matches_chunk(src, chunk) for chunk in retrieved_chunks)
+        s for s in required
+        if any(source_matches_chunk(s, c) for c in retrieved)
     ]
 
-    precision = len(relevant_retrieved) / len(retrieved_chunks)
-    recall    = len(covered_sources)    / len(required_sources) if required_sources else 0.0
+    precision = len(relevant_retrieved) / len(retrieved)
+    recall    = len(covered_sources) / len(required) if required else 0.0
 
     return RetrievalResult(
         qid=question["qid"],
@@ -156,75 +176,64 @@ def evaluate_retrieval(question: dict, pipeline_entry: dict) -> RetrievalResult:
 
 # ── Faithfulness evaluation ────────────────────────────────────────────────────
 
-def normalise(text: str) -> str:
-    """Lowercase, strip punctuation, collapse whitespace."""
+def _normalise(text: str) -> str:
     import re
     text = text.lower()
     text = re.sub(r"[^\w\s%\.\-]", " ", text)
     return re.sub(r"\s+", " ", text).strip()
 
 
-def answer_contains_expected(answer: str, expected: str) -> bool:
-    """
-    Fuzzy check: does the generated answer contain the expected answer string?
-    Normalises both sides before comparing.
-    Uses substring match. For numerical answers (e.g. "0.20%"), this is precise enough.
-    For longer prose answers, consider upgrading to an LLM-as-judge call.
-    """
-    return normalise(expected) in normalise(answer)
+def _answer_contains_expected(answer: str, expected: str) -> bool:
+    return _normalise(expected) in _normalise(answer)
 
 
-def check_unsupported_claims(answer: str, retrieved_chunks: list[dict]) -> bool:
+def _check_unsupported_claims(answer: str, retrieved: list[dict]) -> bool:
     """
-    Heuristic: flag if the answer contains numerical figures (percentages, currency amounts)
-    that do not appear in any retrieved chunk text.
-    This is a lightweight proxy for hallucination detection.
-    For a rigorous check, use an LLM-as-judge prompt (see evaluate_faithfulness_llm below).
+    Heuristic: flag if the answer contains numerical figures that do not
+    appear in any retrieved chunk. Proxy for hallucination detection.
+    Upgrade to LLM-as-judge for production eval.
     """
     import re
-    # Extract numbers from the answer
     answer_numbers = set(re.findall(r"\d+\.?\d*\s*%|\d[\d,]+", answer))
     if not answer_numbers:
-        return False  # no numerical claims to check
-
-    # Collect all text from retrieved chunks
-    all_chunk_text = " ".join(c.get("text", "") for c in retrieved_chunks)
-
-    unsupported = [
-        num for num in answer_numbers
-        if num not in all_chunk_text
-    ]
-    return len(unsupported) > 0
+        return False
+    all_text = " ".join(_get(c, "text") for c in retrieved)
+    return any(num not in all_text for num in answer_numbers)
 
 
-def score_rubric(answer: str, rubric: dict) -> dict:
-    """
-    Score a Type 4 answer against its rubric.
-    Returns a dict with pass/fail per rubric item.
-    This is intentionally simple — upgrade to LLM-as-judge for the real eval.
-    """
-    must_mention  = rubric.get("must_mention", [])
-    should_mention = rubric.get("should_mention", [])
-    must_not_contain = rubric.get("must_not_contain", [])
-
+def _score_rubric(answer: str, rubric: dict) -> dict:
+    """Score a Type 4 answer against its rubric (keyword heuristic)."""
     answer_lower = answer.lower()
 
-    results = {
-        "must_mention":  {item: any(kw.lower() in answer_lower for kw in item.split()) for item in must_mention},
-        "should_mention": {item: any(kw.lower() in answer_lower for kw in item.split()) for item in should_mention},
-        "must_not_contain": {item: (item.lower() not in answer_lower) for item in must_not_contain},
-    }
-    must_score    = sum(results["must_mention"].values()) / len(must_mention) if must_mention else 1.0
-    should_score  = sum(results["should_mention"].values()) / len(should_mention) if should_mention else 1.0
-    must_not_pass = all(results["must_not_contain"].values())
+    def _check_items(items):
+        return {
+            item: any(kw.lower() in answer_lower for kw in item.split())
+            for item in items
+        }
 
-    results["summary"] = {
-        "must_mention_score":   round(must_score, 2),
-        "should_mention_score": round(should_score, 2),
-        "must_not_violated":    must_not_pass,
-        "overall_pass":         must_score == 1.0 and must_not_pass,
+    must_mention     = rubric.get("must_mention", [])
+    should_mention   = rubric.get("should_mention", [])
+    must_not_contain = rubric.get("must_not_contain", [])
+
+    must_results     = _check_items(must_mention)
+    should_results   = _check_items(should_mention)
+    must_not_results = {item: (item.lower() not in answer_lower) for item in must_not_contain}
+
+    must_score   = sum(must_results.values())   / len(must_mention)   if must_mention   else 1.0
+    should_score = sum(should_results.values()) / len(should_mention) if should_mention else 1.0
+    must_not_ok  = all(must_not_results.values())
+
+    return {
+        "must_mention":     must_results,
+        "should_mention":   should_results,
+        "must_not_contain": must_not_results,
+        "summary": {
+            "must_mention_score":   round(must_score, 2),
+            "should_mention_score": round(should_score, 2),
+            "must_not_violated":    must_not_ok,
+            "overall_pass":         must_score == 1.0 and must_not_ok,
+        },
     }
-    return results
 
 
 def evaluate_faithfulness(question: dict, pipeline_entry: dict) -> FaithfulnessResult:
@@ -237,12 +246,12 @@ def evaluate_faithfulness(question: dict, pipeline_entry: dict) -> FaithfulnessR
     contains_expected = None
     rubric_scores     = None
 
-    if query_type in (1, 2, 3) and expected and "<FILL" not in expected:
-        contains_expected = answer_contains_expected(answer, expected)
+    if query_type in (1, 2, 3) and expected and "<FILL" not in str(expected):
+        contains_expected = _answer_contains_expected(answer, expected)
     elif query_type == 4 and rubric:
-        rubric_scores = score_rubric(answer, rubric)
+        rubric_scores = _score_rubric(answer, rubric)
 
-    unsupported = check_unsupported_claims(answer, retrieved)
+    unsupported = _check_unsupported_claims(answer, retrieved)
 
     return FaithfulnessResult(
         qid=question["qid"],
@@ -256,13 +265,6 @@ def evaluate_faithfulness(question: dict, pipeline_entry: dict) -> FaithfulnessR
 # ── Attribution evaluation ─────────────────────────────────────────────────────
 
 def evaluate_attribution(question: dict, pipeline_entry: dict) -> AttributionResult:
-    """
-    Check whether cited_sources in the pipeline output align with ground-truth sources.
-
-    correct_sources_cited: every required source was cited
-    wrong_sources_cited:   any cited source is not in the required set
-    attribution_score:     |correct ∩ cited| / |required|
-    """
     required = question.get("sources", [])
     cited    = pipeline_entry.get("cited_sources", [])
 
@@ -276,12 +278,12 @@ def evaluate_attribution(question: dict, pipeline_entry: dict) -> AttributionRes
         )
 
     correctly_cited = [
-        src for src in required
-        if any(source_matches_chunk(src, cite) for cite in cited)
+        s for s in required
+        if any(source_matches_chunk(s, c) for c in cited)
     ]
     wrongly_cited = [
-        cite for cite in cited
-        if not any(source_matches_chunk(src, cite) for src in required)
+        c for c in cited
+        if not any(source_matches_chunk(s, c) for s in required)
     ]
 
     score = len(correctly_cited) / len(required) if required else 0.0
@@ -298,18 +300,11 @@ def evaluate_attribution(question: dict, pipeline_entry: dict) -> AttributionRes
 # ── Aggregate metrics ──────────────────────────────────────────────────────────
 
 def aggregate(results: list[QuestionEval]) -> dict:
-    """
-    Compute summary statistics sliced by query_type and difficulty.
-    """
     def _mean(vals):
         return round(sum(vals) / len(vals), 3) if vals else 0.0
 
-    def _slice(items, key, val):
-        return [r for r in items if getattr(r, key, None) == val]
-
-    # Overall
     overall = {
-        "n":                       len(results),
+        "n": len(results),
         "retrieval_precision_mean": _mean([r.retrieval.precision_at_k for r in results]),
         "retrieval_recall_mean":    _mean([r.retrieval.recall_at_k    for r in results]),
         "any_relevant_pct":         _mean([float(r.retrieval.any_relevant_retrieved) for r in results]),
@@ -319,10 +314,11 @@ def aggregate(results: list[QuestionEval]) -> dict:
             for r in results
             if r.faithfulness.answer_contains_expected is not None
         ]),
-        "unsupported_claims_pct":   _mean([float(r.faithfulness.has_unsupported_claims) for r in results]),
+        "unsupported_claims_pct": _mean([
+            float(r.faithfulness.has_unsupported_claims) for r in results
+        ]),
     }
 
-    # By query type
     by_type = {}
     for qt in (1, 2, 3, 4):
         subset = [r for r in results if r.query_type == qt]
@@ -335,7 +331,6 @@ def aggregate(results: list[QuestionEval]) -> dict:
             "attribution_score_mean":   _mean([r.attribution.attribution_score for r in subset]),
         }
 
-    # By difficulty
     by_difficulty = {}
     for diff in ("easy", "medium", "hard"):
         subset = [r for r in results if r.difficulty == diff]
@@ -350,23 +345,19 @@ def aggregate(results: list[QuestionEval]) -> dict:
     return {"overall": overall, "by_query_type": by_type, "by_difficulty": by_difficulty}
 
 
-# ── LLM-as-judge stub ──────────────────────────────────────────────────────────
-# Uncomment and wire up once your generation pipeline is working.
-# This replaces the heuristic faithfulness check for Type 4 questions.
+# ── LLM-as-judge stub ─────────────────────────────────────────────────────────
+# Uncomment once generation is wired up. Replaces heuristic rubric scoring
+# for Type 4 questions with a grounded Claude judgment.
 
 # def evaluate_faithfulness_llm(question: dict, pipeline_entry: dict) -> dict:
-#     """
-#     Use Claude to judge faithfulness and rubric satisfaction.
-#     Pass retrieved chunks as context so the judge can verify grounding.
-#     """
 #     import anthropic
 #     client = anthropic.Anthropic()
 #     context = "\n\n---\n\n".join(
-#         f"[{c.get('etf_ticker','?')} | {c.get('doc_type','?')} | {c.get('year','?')}]\n{c.get('text','')}"
+#         f"[{_get(c, 'etf_isin')} | {_get(c, 'doc_type')} | {_get(c, 'year')}]\n{_get(c, 'text')}"
 #         for c in pipeline_entry.get("retrieved_chunks", [])
 #     )
 #     rubric_str = json.dumps(question.get("answer_rubric", {}), indent=2)
-#     prompt = f"""You are evaluating a RAG system answer.
+#     prompt = f"""You are evaluating a RAG system answer about ETF documents.
 #
 # QUESTION: {question['question']}
 #
@@ -380,7 +371,7 @@ def aggregate(results: list[QuestionEval]) -> dict:
 # {rubric_str}
 #
 # Score the answer:
-# 1. Does it cover all must_mention items? (yes/no + which are missing)
+# 1. Does it cover all must_mention items? (yes/no + list any missing)
 # 2. Does it violate any must_not_contain items? (yes/no)
 # 3. Is every factual claim grounded in the retrieved context? (yes/no)
 # Respond in JSON only."""
@@ -403,11 +394,23 @@ def run_evaluation(
     gt_data = json.loads(ground_truth_path.read_text())
     po_data = json.loads(pipeline_output_path.read_text())
 
-    questions     = {q["qid"]: q  for q in gt_data["questions"]}
-    pipeline_out  = {e["qid"]: e  for e in po_data}
+    # Only evaluate questions in the active "questions" list — not _parked_type3
+    questions    = {q["qid"]: q for q in gt_data["questions"]}
+    pipeline_out = {e["qid"]: e for e in po_data}
 
     results: list[QuestionEval] = []
     missing_qids = []
+
+    _empty_faithful = lambda qid, qt: FaithfulnessResult(
+        qid=qid, query_type=qt,
+        answer_contains_expected=None, rubric_scores=None,
+        has_unsupported_claims=False,
+    )
+    _empty_attr = lambda qid, qt: AttributionResult(
+        qid=qid, query_type=qt,
+        correct_sources_cited=False, wrong_sources_cited=False,
+        attribution_score=0.0,
+    )
 
     for qid, question in questions.items():
         if qid not in pipeline_out:
@@ -415,28 +418,15 @@ def run_evaluation(
             continue
 
         entry = pipeline_out[qid]
+        qt    = question["query_type"]
 
         retrieval    = evaluate_retrieval(question, entry)
-        faithfulness = (
-            FaithfulnessResult(qid=qid, query_type=question["query_type"],
-                               answer_contains_expected=None,
-                               rubric_scores=None,
-                               has_unsupported_claims=False)
-            if retrieval_only
-            else evaluate_faithfulness(question, entry)
-        )
-        attribution = (
-            AttributionResult(qid=qid, query_type=question["query_type"],
-                              correct_sources_cited=False,
-                              wrong_sources_cited=False,
-                              attribution_score=0.0)
-            if retrieval_only
-            else evaluate_attribution(question, entry)
-        )
+        faithfulness = _empty_faithful(qid, qt) if retrieval_only else evaluate_faithfulness(question, entry)
+        attribution  = _empty_attr(qid, qt)     if retrieval_only else evaluate_attribution(question, entry)
 
         results.append(QuestionEval(
             qid=qid,
-            query_type=question["query_type"],
+            query_type=qt,
             query_type_label=question.get("query_type_label", ""),
             difficulty=question.get("difficulty", ""),
             retrieval=retrieval,
@@ -447,9 +437,10 @@ def run_evaluation(
     if missing_qids:
         print(f"[warn] {len(missing_qids)} questions missing from pipeline output: {missing_qids}")
 
-    summary = aggregate(results)
-    return results, summary
+    return results, aggregate(results)
 
+
+# ── Console summary ────────────────────────────────────────────────────────────
 
 def print_summary(summary: dict) -> None:
     print("\n" + "═" * 56)
@@ -457,24 +448,24 @@ def print_summary(summary: dict) -> None:
     print("═" * 56)
 
     ov = summary["overall"]
-    print(f"\n  Overall ({ov['n']} questions)")
-    print(f"  Retrieval Precision@k : {ov['retrieval_precision_mean']:.1%}")
-    print(f"  Retrieval Recall@k    : {ov['retrieval_recall_mean']:.1%}")
-    print(f"  Any Relevant Retrieved: {ov['any_relevant_pct']:.1%}")
-    print(f"  Attribution Score     : {ov['attribution_score_mean']:.1%}")
-    print(f"  Faithfulness Pass     : {ov.get('faithfulness_pass_pct', 0):.1%}")
-    print(f"  Unsupported Claims    : {ov['unsupported_claims_pct']:.1%}")
+    print(f"\n  Overall  (n={ov['n']})")
+    print(f"  Retrieval Precision@k  : {ov['retrieval_precision_mean']:.1%}")
+    print(f"  Retrieval Recall@k     : {ov['retrieval_recall_mean']:.1%}")
+    print(f"  Any Relevant Retrieved : {ov['any_relevant_pct']:.1%}")
+    print(f"  Attribution Score      : {ov['attribution_score_mean']:.1%}")
+    print(f"  Faithfulness Pass      : {ov.get('faithfulness_pass_pct', 0):.1%}")
+    print(f"  Unsupported Claims     : {ov['unsupported_claims_pct']:.1%}")
 
     print("\n  By Query Type")
     for label, stats in summary.get("by_query_type", {}).items():
-        print(f"  {label} (n={stats['n']}): "
+        print(f"  {label}  (n={stats['n']}):  "
               f"P={stats['retrieval_precision_mean']:.1%}  "
               f"R={stats['retrieval_recall_mean']:.1%}  "
               f"Attr={stats['attribution_score_mean']:.1%}")
 
     print("\n  By Difficulty")
     for diff, stats in summary.get("by_difficulty", {}).items():
-        print(f"  {diff:6s} (n={stats['n']}): "
+        print(f"  {diff:6s}  (n={stats['n']}):  "
               f"P={stats['retrieval_precision_mean']:.1%}  "
               f"R={stats['retrieval_recall_mean']:.1%}")
 
@@ -487,11 +478,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Evaluate ETF RAG pipeline")
     p.add_argument("--ground_truth",    type=Path, required=True)
     p.add_argument("--pipeline_output", type=Path, required=True,
-                   help="JSON list of pipeline outputs (one entry per qid)")
-    p.add_argument("--report",          type=Path, default=Path("evaluation/report.json"),
+                   help="JSON list of pipeline outputs, one entry per qid")
+    p.add_argument("--report",          type=Path,
+                   default=Path("evaluation/report.json"),
                    help="Where to write the full per-question report")
     p.add_argument("--retrieval_only",  action="store_true",
-                   help="Skip faithfulness and attribution (use before generation is wired up)")
+                   help="Skip faithfulness and attribution — useful before generation is wired up")
     return p
 
 
@@ -508,20 +500,20 @@ def main():
         "summary": summary,
         "per_question": [
             {
-                "qid":             r.qid,
-                "query_type":      r.query_type,
-                "query_type_label":r.query_type_label,
-                "difficulty":      r.difficulty,
-                "retrieval":       asdict(r.retrieval),
-                "faithfulness":    asdict(r.faithfulness),
-                "attribution":     asdict(r.attribution),
+                "qid":              r.qid,
+                "query_type":       r.query_type,
+                "query_type_label": r.query_type_label,
+                "difficulty":       r.difficulty,
+                "retrieval":        asdict(r.retrieval),
+                "faithfulness":     asdict(r.faithfulness),
+                "attribution":      asdict(r.attribution),
             }
             for r in results
         ],
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2))
-    print(f"Full report written → {args.report}")
+    print(f"Full report → {args.report}")
 
 
 if __name__ == "__main__":
