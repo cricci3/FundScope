@@ -2,3 +2,5 @@ argparse
 pathlib
 typing
 pdfplumber
+chromadb
+sentence-transformers
