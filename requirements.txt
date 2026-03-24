@@ -1,3 +1,4 @@
+openai
 argparse
 pathlib
 typing
