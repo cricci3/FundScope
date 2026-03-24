@@ -6,7 +6,7 @@
     "type": "factsheet",
     "currency": "USD",
     "share_class": "acc",
-    "year": 2023,
+    "year": 2026,
     "quarter": "Q4"
   },
   "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
@@ -16,7 +16,7 @@
     "type": "kid",
     "currency": "USD",
     "share_class": "acc",
-    "year": 2023,
+    "year": 2026,
     "quarter": null
   },
   "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
@@ -26,7 +26,7 @@
     "type": "factsheet",
     "currency": "USD",
     "share_class": "acc",
-    "year": 2023,
+    "year": 2026,
     "quarter": "Q4"
   },
   "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
@@ -36,7 +36,7 @@
     "type": "kid",
     "currency": "USD",
     "share_class": "acc",
-    "year": 2023,
+    "year": 2026,
     "quarter": null
   }
 }

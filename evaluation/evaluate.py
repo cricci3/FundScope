@@ -12,12 +12,12 @@ primary ETF identifier. source_matches_chunk() matches on (etf_isin, doc_type, y
 
 Usage:
     # Full evaluation
-    python evaluate.py --ground_truth evaluation/ground_truth.json \
+    python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json \
                        --pipeline_output evaluation/pipeline_output.json \
                        --report evaluation/report.json
 
     # Retrieval-only (before generation is wired up)
-    python evaluate.py --ground_truth evaluation/ground_truth.json \
+    python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json \
                        --pipeline_output evaluation/pipeline_output.json \
                        --retrieval_only
 

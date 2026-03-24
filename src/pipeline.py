@@ -19,17 +19,17 @@ Output format is exactly what evaluate.py expects:
 Usage:
 
     # Single query (interactive)
-    python pipeline.py --query "What is the TER of IE00B4L5Y983?" \
+    python src/pipeline.py --query "What is the TER of IE00B4L5Y983?" \
                        --etf_isin IE00B4L5Y983 --doc_type factsheet \
                        --query_type 1
 
     # Comparative query
-    python pipeline.py --query "Compare the ongoing charges of IE00B4L5Y983 and IE00BD4TXV59" \
+    python src/pipeline.py --query "Compare the ongoing charges of IE00B4L5Y983 and IE00BD4TXV59" \
                        --isin_list IE00B4L5Y983 IE00BD4TXV59 \
                        --doc_type factsheet --query_type 2
 
     # Run all ground truth questions and save output for evaluate.py
-    python pipeline.py --run_eval \
+    python src/pipeline.py --run_eval \
                        --ground_truth evaluation/ground_truth.json \
                        --output      evaluation/pipeline_output.json
 
