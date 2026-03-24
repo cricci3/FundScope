@@ -209,3 +209,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+index/chroma_db/chroma.sqlite3
+index/chroma_db/7794ae10-9c13-4a03-983f-4376e15f1764/data_level0.bin
+index/chroma_db/7794ae10-9c13-4a03-983f-4376e15f1764/header.bin
+index/chroma_db/7794ae10-9c13-4a03-983f-4376e15f1764/length.bin
+index/chroma_db/7794ae10-9c13-4a03-983f-4376e15f1764/link_lists.bin
+index/chroma_db/e4d3b357-e546-4587-8207-1b4f68658475/data_level0.bin
+index/chroma_db/e4d3b357-e546-4587-8207-1b4f68658475/header.bin
+index/chroma_db/e4d3b357-e546-4587-8207-1b4f68658475/length.bin
+index/chroma_db/e4d3b357-e546-4587-8207-1b4f68658475/length.bin
+index/chroma_db/e4d3b357-e546-4587-8207-1b4f68658475/link_lists.bin
