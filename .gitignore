@@ -1,3 +1,11 @@
+data/raw/
+data/processed/
+index/
+evaluation/pipeline_output.json
+evaluation/report.json
+*.pyc
+.env
+
 *.pdf
 data/*
 src/index/*

@@ -41,7 +41,7 @@ PDF files (factsheets + KIDs)
   src/generate.py        Prompt construction + Ollama API call
         │
         ▼
-  ask.py                 Interactive user interface
+  src/ask.py                 Interactive user interface
 ```
 
 ---
@@ -50,10 +50,10 @@ PDF files (factsheets + KIDs)
 
 ```
 FundScope/
-├── ask.py                        # Interactive entrypoint — start here
-├── metadata.json                 # Document registry (ISIN, issuer, year, doc type)
 │
 ├── src/
+│   ├── ask.py                    # Interactive entrypoint — start here
+│   ├── metadata.json             # Document registry (ISIN, issuer, year, doc type)
 │   ├── ingest.py                 # PDF extraction, cleaning, chunking
 │   ├── embed.py                  # Embedding + ChromaDB indexing
 │   ├── retrieve.py               # Semantic search + metadata filtering
@@ -118,8 +118,6 @@ Ollama starts automatically as a background service after installation. If the m
 
 ## Setup — running from zero
 
-Follow these steps in order the first time you set up the project.
-
 ### Step 1 — Add your PDF documents
 
 Place your ETF factsheets and KIDs in `data/raw/`. Then register each file in `metadata.json`:
@@ -135,54 +133,39 @@ Place your ETF factsheets and KIDs in `data/raw/`. Then register each file in `m
     "share_class": "acc",
     "year": 2026,
     "quarter": "Q4"
-  },
-  "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
-    "ticker": "EUNL",
-    "issuer": "ishares",
-    "category": "MSCI World",
-    "type": "kid",
-    "currency": "USD",
-    "share_class": "acc",
-    "year": 2026,
-    "quarter": null
   }
 }
 ```
 
-Supported issuers: `ishares`, `ubs`, `xtrackers`, `amundi`.
-Document types: `factsheet`, `kid`.
+Supported issuers: `ishares`, `ubs`, `xtrackers`, `amundi`. Document types: `factsheet`, `kid`.
 
-### Step 2 — Ingest the PDFs
-
-Extract text, clean it, split into chunks, and attach metadata.
+### Step 2 — Run setup
 
 ```bash
-python src/ingest.py \
-    --batch data/raw/ \
-    --config metadata.json \
-    --output_dir data/processed/
+python setup.py
 ```
 
-Output: one JSON file per document in `data/processed/`, each containing an array of chunk objects with text, metadata, and section heading.
+This single command checks all prerequisites, ingests your PDFs, and builds the vector index.
+Once it completes, `ask.py` is ready to use.
 
-### Step 3 — Build the vector index
-
-Embed all chunks and store them in ChromaDB.
+**Options:**
 
 ```bash
-python src/embed.py \
-    --input_dir data/processed/ \
-    --db_path index/chroma_db/
+# Force full rebuild of the index (e.g. after changing chunk size or adding documents)
+python setup.py --rebuild
+
+# Skip ingestion if data/processed/ is already populated
+python setup.py --skip_ingest
+
+# Skip Ollama check (retrieval-only mode, no answer generation)
+python setup.py --skip_ollama
+
+# Use a different Ollama model
+python setup.py --model mistral:7b
 ```
 
-This only needs to run once. If you add new documents later, run it again without `--rebuild` and only the new chunks will be indexed. To rebuild from scratch:
-
-```bash
-python src/embed.py \
-    --input_dir data/processed/ \
-    --db_path index/chroma_db/ \
-    --rebuild
-```
+If Ollama is not installed, setup still completes and builds the index.
+You can use retrieval-only evaluation without a model — see the Evaluation section below.
 
 ---
 
