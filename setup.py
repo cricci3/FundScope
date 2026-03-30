@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT         = Path(__file__).resolve().parent
 DATA_RAW     = ROOT / "data" / "raw"
 DATA_PROC    = ROOT / "data" / "processed"
-INDEX_PATH   = ROOT / "index" / "chroma_db"
+INDEX_PATH   = ROOT / "src" / "index" / "chroma_db"
 METADATA     = ROOT / "src" / "metadata.json"
 SRC          = ROOT / "src"
 

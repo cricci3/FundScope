@@ -48,10 +48,10 @@ Usage (Python API — called from pipeline.py):
     )
 
 Usage (CLI — useful for manual inspection during development):
-    python retrieve.py --query "What is the TER of IE00B4L5Y983?" \
+    python src/retrieve.py --query "What is the TER of IE00B4L5Y983?" \
                        --etf_isin IE00B4L5Y983 --doc_type factsheet
 
-    python retrieve.py --query "Compare ongoing charges" \
+    python src/retrieve.py --query "Compare ongoing charges" \
                        --isin_list IE00B4L5Y983 IE00BD4TXV59 \
                        --doc_type factsheet --mode comparative
 
@@ -199,9 +199,31 @@ class Retriever:
         self._model_name = model_name
 
         print(f"[retrieve] Loading ChromaDB from {self._db_path}")
-        self._client     = chromadb.PersistentClient(path=str(self._db_path))
-        self._collection = self._client.get_collection(collection_name)
-        print(f"[retrieve] Collection '{collection_name}' — {self._collection.count()} chunks")
+        self._client = chromadb.PersistentClient(path=str(self._db_path))
+
+        try:
+            self._collection = self._client.get_collection(collection_name)
+        except Exception:
+            raise RuntimeError(
+                f"\n  Collection '{collection_name}' not found in ChromaDB.\n"
+                f"  The index has not been built yet.\n\n"
+                f"  Run setup first:\n"
+                f"      python setup.py\n\n"
+                f"  Or rebuild manually:\n"
+                f"      python src/embed.py --input_dir data/processed/ "
+                f"--db_path index/chroma_db/ --rebuild\n"
+            )
+
+        count = self._collection.count()
+        if count == 0:
+            raise RuntimeError(
+                f"\n  Collection '{collection_name}' exists but contains no chunks.\n"
+                f"  Ingestion may have failed or produced no output.\n\n"
+                f"  Check that data/processed/ contains .json files, then run:\n"
+                f"      python setup.py --rebuild\n"
+            )
+
+        print(f"[retrieve] Collection '{collection_name}' — {count} chunks")
 
         print(f"[retrieve] Loading model: {model_name}")
         self._model = SentenceTransformer(model_name)

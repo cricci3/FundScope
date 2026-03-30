@@ -8,13 +8,13 @@ No flags, no ISINs, no doc_type — just a question.
 
 Usage:
     # Interactive mode (keeps asking until you type 'exit')
-    python ask.py
+    python src/ask.py
 
     # Single question mode
-    python ask.py --query "What is the TER of the iShares MSCI World ETF?"
+    python src/ask.py --query "What is the TER of the iShares MSCI World ETF?"
 
     # Show the retrieved chunks alongside the answer
-    python ask.py --show_chunks
+    python src/ask.py --show_chunks
 """
 
 import re
@@ -23,15 +23,14 @@ import argparse
 from pathlib import Path
 
 # Allow imports from src/
-ROOT = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT / "src"))
+ROOT    = Path(__file__).resolve().parent
+DB_PATH = ROOT / "index" / "chroma_db"
 
 from retrieve import Retriever, route_query
 from generate import Generator, build_context
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-DB_PATH    = ROOT / "index" / "chroma_db"
 K_DEFAULT  = 6
 
 # Known ISINs in the corpus — used for automatic query routing
