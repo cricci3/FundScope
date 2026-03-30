@@ -251,8 +251,8 @@ def main():
         print("""
   You can now ask questions:
 
-    python ask.py                         ← interactive mode
-    python ask.py --query "your question" ← single question
+    python src/ask.py                         ← interactive mode
+    python src/ask.py --query "your question" ← single question
 """)
     else:
         print("""
