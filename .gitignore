@@ -1,14 +1,17 @@
 data/raw/
 data/processed/
 index/
+
+# Evaluation outputs
 evaluation/pipeline_output.json
 evaluation/report.json
-*.pyc
-.env
 
-*.pdf
-data/*
-src/index/*
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+index/*
+!index/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

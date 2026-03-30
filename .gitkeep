@@ -1,0 +1,3 @@
+echo "" > data/raw/.gitkeep
+echo "" > data/processed/.gitkeep
+echo "" > index/.gitkeep
