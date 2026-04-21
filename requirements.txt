@@ -5,3 +5,4 @@ typing
 pdfplumber
 chromadb
 sentence-transformers
+yfinance
