@@ -36,6 +36,8 @@ try:
 except ImportError:
     raise ImportError("pdfplumber is required: pip install pdfplumber")
 
+from config import DATA_PROCESSED
+
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -396,8 +398,13 @@ def deduplicate_chunks(chunks: list[Chunk]) -> list[Chunk]:
 
 # ── Chunk ID helper ────────────────────────────────────────────────────────────
 
-def make_chunk_id(metadata: DocumentMetadata, prefix: str, text: str) -> str:
-    key = f"{metadata.etf_isin}_{metadata.year}_{prefix}_{text[:80]}"
+def make_chunk_id(metadata: DocumentMetadata, block_type: str, text: str) -> str:
+    """
+    Stable id: same PDF + block type + full text → same id, independent of
+    year/quarter in the config, so re-ingesting a document never duplicates it.
+    """
+    text_hash = hashlib.sha256(text.encode()).hexdigest()
+    key = f"{metadata.source_file}|{block_type}|{text_hash}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
@@ -541,8 +548,13 @@ def build_key_facts_chunk(metadata: DocumentMetadata) -> Chunk:
             lines.append(f"{label}: {val}")
 
     text = "\n".join(lines)
+    # The id ignores the Year/Reference date lines, which come from config
+    # rather than the PDF — otherwise a year change would mint a new chunk.
+    id_text = "\n".join(
+        l for l in lines if not l.startswith(("Year:", "Reference date:"))
+    )
     return Chunk(
-        chunk_id=hashlib.sha256(text.encode()).hexdigest()[:16],
+        chunk_id=make_chunk_id(metadata, "key_facts", id_text),
         text=text,
         metadata=metadata,
         page_number=None,
@@ -698,7 +710,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--currency",    default="USD")
     p.add_argument("--share_class", default="acc")
     p.add_argument("--quarter",     default=None)
-    p.add_argument("--output_dir",  type=Path, default=Path("data/processed"))
+    p.add_argument("--output_dir",  type=Path, default=DATA_PROCESSED)
     p.add_argument("--config",      type=Path,
                    help="JSON config mapping filenames to metadata (required for --batch)")
     p.add_argument("--no_dedup",    action="store_true")

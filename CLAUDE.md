@@ -54,8 +54,13 @@ RAG over ETF factsheets and KIDs (PDF), all local: `pdfplumber` → chunks JSON 
 - **Two entrypoints**: `ask.py` detects query type/ISINs with keyword rules and a hard-coded `KNOWN_ISINS`; `agent.py` lets the LLM choose tools (`search_etf_docs`, `get_live_data`, `list_available_etfs`). The roadmap (phase 4) makes the agent the only entrypoint.
 - **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall against expected sources, heuristic faithfulness, attribution, unsupported-claims check, Type 4 rubric. Known to be unreliable until phase 2 is done.
 
-### Known pitfalls (fixed by phase 1)
+### Paths, ids and dedup
 
-- **Index paths disagree**: `ask.py`/`agent.py`/`setup.py` build paths from their own location, while `pipeline.py`/`retrieve.py`/`embed.py` default to `index/chroma_db/` relative to the cwd — evaluation and the app can query different indexes. Run from the repo root until `src/config.py` exists.
-- `data/processed/` contains stale re-ingested files (`EUNL_*`, `*_2023_*`) and `embed.py` indexes every `*.json` there, producing duplicate chunks with empty `etf_isin`.
+- All paths and the collection/embedding-model names live in `src/config.py` (absolute, cwd-independent). `setup.py` adds `src/` to `sys.path` to import it. Don't hard-code `index/chroma_db` anywhere else.
+- `embed.py` only indexes JSON files whose stem matches a `metadata.json` entry (`build_output_stem`); others are logged as `[skip]`. It also skips chunks whose `content_hash` is already indexed for the same `etf_isin` + `doc_type`.
+- `chunk_id` = hash of `source_file | block_type | sha256(full text)`, independent of year; the key-facts chunk id ignores its `Year:`/`Reference date:` lines.
+- Scripts print non-ASCII characters (`←`, `✓`); when stdout is piped on Windows set `PYTHONIOENCODING=utf-8` or they crash with `UnicodeEncodeError`.
+
+### Known pitfalls
+
 - ISIN/name/ticker maps are duplicated in `ask.py`, `agent.py` and `live_data.py`; adding an ETF means updating `metadata.json` plus these copies (until `src/registry.py`, TODO 4.4).

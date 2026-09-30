@@ -44,9 +44,7 @@ from typing import Any
 from openai import OpenAI
 
 # ── Local imports ──────────────────────────────────────────────────────────────
-ROOT    = Path(__file__).resolve().parent
-DB_PATH = ROOT / "index" / "chroma_db"
-
+from config import INDEX_PATH as DB_PATH
 from retrieve import Retriever, route_query
 from live_data import get_etf_live_data, format_for_prompt, ISIN_TO_NAME
 

@@ -23,12 +23,15 @@ from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
-ROOT         = Path(__file__).resolve().parent
-DATA_RAW     = ROOT / "data" / "raw"
-DATA_PROC    = ROOT / "data" / "processed"
-INDEX_PATH   = ROOT / "src" / "index" / "chroma_db"
-METADATA     = ROOT / "src" / "metadata.json"
-SRC          = ROOT / "src"
+sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
+from config import (  # noqa: E402
+    PROJECT_ROOT as ROOT,
+    DATA_RAW,
+    DATA_PROCESSED as DATA_PROC,
+    INDEX_PATH,
+    METADATA_PATH as METADATA,
+    SRC_DIR as SRC,
+)
 
 DEFAULT_MODEL = "llama3.2:3b"
 
