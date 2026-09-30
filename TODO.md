@@ -26,7 +26,9 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
   - Oggi `ask.py`/`agent.py`/`setup.py` usano `src/index/chroma_db`, mentre `pipeline.py`/`retrieve.py` usano `index/chroma_db` relativo alla cwd → valutazione e app interrogano indici diversi.
   - Done quando: `grep -rn "chroma_db" src/ setup.py` mostra solo `config.py`; tutti gli script funzionano da qualsiasi cwd.
 
-- [ ] **1.2 Eliminare indici e dati duplicati**
+- [x] **1.1b Ambiente uv** — `pyproject.toml` + `uv.lock` + `.python-version` (3.13); `.venv` gestito da `uv sync`, script lanciati con `uv run python ...`.
+
+- [x] **1.2 Eliminare indici e dati duplicati**
   - Cancellare `src/index/`, `src/src/`, `src/__pycache__/` e le cartelle UUID orfane in `index/chroma_db/`.
   - Cancellare da `data/processed/` i file obsoleti: `EUNL_*`, `UETW_*`, `*_2023_*` (sono gli stessi PDF re-ingeriti con metadati diversi; 302 chunk hanno `etf_isin` vuoto).
   - Done quando: dopo rebuild l'indice contiene ~300 chunk, tutti con `etf_isin` valorizzato e `year == 2026`.
@@ -42,7 +44,8 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 - [x] **1.5 `.gitignore`** — aggiungere `src/index/`, `.env`, `*.sqlite3`; rimuovere dal repo eventuali file già tracciati per errore (`git rm --cached`).
 
-- [ ] **1.6 Rebuild pulito** — `python setup.py --rebuild` e verificare conteggi con `Retriever.collection_stats()`.
+- [x] **1.6 Rebuild pulito** — `python setup.py --rebuild` e verificare conteggi con `Retriever.collection_stats()`.
+  - Esito (30/09/2026): 299 chunk (factsheet 198, kid 101; IE00B4L5Y983 115, IE00BD4TXV59 184), tutti con `etf_isin` e `year == 2026`. Retrieval-only: precision 0.502 → 0.988, recall 0.956 → 1.000. Metriche di generazione non rimisurate (Ollama non installato).
 
 ---
 

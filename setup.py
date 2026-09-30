@@ -100,11 +100,14 @@ def check_ollama(model: str) -> bool:
     header("Checking Ollama")
 
     # Check if ollama binary exists
-    result = subprocess.run(
-        ["ollama", "list"],
-        capture_output=True, text=True
-    )
-    if result.returncode != 0:
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True, text=True
+        )
+    except FileNotFoundError:
+        result = None
+    if result is None or result.returncode != 0:
         warn("Ollama is not installed or not running.")
         print("""
   Ollama is required to generate answers (free, local, no API key).

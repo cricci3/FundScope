@@ -17,8 +17,10 @@ Current baseline (`evaluation/report.json`, `llama3.2:3b`): retrieval recall 0.9
 
 No test suite, linter or packaging yet (planned in phase 8). Scripts in `src/` import each other as top-level modules (`from retrieve import Retriever`), so run them as `python src/<script>.py` — never as `python -m`.
 
+Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13): `uv sync` creates `.venv`; prefix the commands below with `uv run` (e.g. `uv run python setup.py`). Add deps with `uv add <pkg>`. `requirements.txt` is legacy (cleanup in TODO 8.1). Ollama is not installed on this machine: use `--skip_ollama`; generation metrics can't be measured until phase 3 (cloud LLM).
+
 ```bash
-pip install -r requirements.txt
+uv sync
 
 # Full setup: checks Ollama + model, ingests data/raw/ via src/metadata.json, builds the index
 python setup.py [--rebuild] [--skip_ingest] [--skip_ollama] [--model llama3.2:3b]
@@ -33,7 +35,7 @@ python src/ask.py [--query "..."] [--show_chunks] [--model ...]     # keyword-ro
 python src/agent.py [--query "..."] [--show_calls] [--model ...]    # tool-calling agent (needs tool-capable model, e.g. mistral:7b)
 python src/live_data.py --isin IE00B4L5Y983                         # yfinance market data
 
-# Evaluation (15 ground-truth questions)
+# Evaluation (17 ground-truth questions)
 python src/pipeline.py --run_eval --ground_truth evaluation/ground_truth.json --output evaluation/pipeline_output.json
 python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/pipeline_output.json --report evaluation/report.json [--retrieval_only]
 ```
