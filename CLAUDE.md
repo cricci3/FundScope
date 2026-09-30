@@ -17,8 +17,10 @@ Current baseline (`evaluation/report.json`, `llama3.2:3b`): retrieval recall 0.9
 
 No test suite, linter or packaging yet (planned in phase 8). Scripts in `src/` import each other as top-level modules (`from retrieve import Retriever`), so run them as `python src/<script>.py` — never as `python -m`.
 
+Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13): `uv sync` creates `.venv`; prefix the commands below with `uv run` (e.g. `uv run python setup.py`). Add deps with `uv add <pkg>`. `requirements.txt` is legacy (cleanup in TODO 8.1). Ollama is not installed on this machine: use `--skip_ollama`; generation metrics can't be measured until phase 3 (cloud LLM).
+
 ```bash
-pip install -r requirements.txt
+uv sync
 
 # Full setup: checks Ollama + model, ingests data/raw/ via src/metadata.json, builds the index
 python setup.py [--rebuild] [--skip_ingest] [--skip_ollama] [--model llama3.2:3b]
@@ -33,7 +35,7 @@ python src/ask.py [--query "..."] [--show_chunks] [--model ...]     # keyword-ro
 python src/agent.py [--query "..."] [--show_calls] [--model ...]    # tool-calling agent (needs tool-capable model, e.g. mistral:7b)
 python src/live_data.py --isin IE00B4L5Y983                         # yfinance market data
 
-# Evaluation (15 ground-truth questions)
+# Evaluation (17 ground-truth questions)
 python src/pipeline.py --run_eval --ground_truth evaluation/ground_truth.json --output evaluation/pipeline_output.json
 python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/pipeline_output.json --report evaluation/report.json [--retrieval_only]
 ```
@@ -54,8 +56,13 @@ RAG over ETF factsheets and KIDs (PDF), all local: `pdfplumber` → chunks JSON 
 - **Two entrypoints**: `ask.py` detects query type/ISINs with keyword rules and a hard-coded `KNOWN_ISINS`; `agent.py` lets the LLM choose tools (`search_etf_docs`, `get_live_data`, `list_available_etfs`). The roadmap (phase 4) makes the agent the only entrypoint.
 - **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall against expected sources, heuristic faithfulness, attribution, unsupported-claims check, Type 4 rubric. Known to be unreliable until phase 2 is done.
 
-### Known pitfalls (fixed by phase 1)
+### Paths, ids and dedup
 
-- **Index paths disagree**: `ask.py`/`agent.py`/`setup.py` build paths from their own location, while `pipeline.py`/`retrieve.py`/`embed.py` default to `index/chroma_db/` relative to the cwd — evaluation and the app can query different indexes. Run from the repo root until `src/config.py` exists.
-- `data/processed/` contains stale re-ingested files (`EUNL_*`, `*_2023_*`) and `embed.py` indexes every `*.json` there, producing duplicate chunks with empty `etf_isin`.
+- All paths and the collection/embedding-model names live in `src/config.py` (absolute, cwd-independent). `setup.py` adds `src/` to `sys.path` to import it. Don't hard-code `index/chroma_db` anywhere else.
+- `embed.py` only indexes JSON files whose stem matches a `metadata.json` entry (`build_output_stem`); others are logged as `[skip]`. It also skips chunks whose `content_hash` is already indexed for the same `etf_isin` + `doc_type`.
+- `chunk_id` = hash of `source_file | block_type | sha256(full text)`, independent of year; the key-facts chunk id ignores its `Year:`/`Reference date:` lines.
+- Scripts print non-ASCII characters (`←`, `✓`); when stdout is piped on Windows set `PYTHONIOENCODING=utf-8` or they crash with `UnicodeEncodeError`.
+
+### Known pitfalls
+
 - ISIN/name/ticker maps are duplicated in `ask.py`, `agent.py` and `live_data.py`; adding an ETF means updating `metadata.json` plus these copies (until `src/registry.py`, TODO 4.4).

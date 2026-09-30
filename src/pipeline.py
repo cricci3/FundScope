@@ -45,13 +45,14 @@ from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Optional
 
+from config import INDEX_PATH, EVAL_DIR
 from retrieve import Retriever, RetrievedChunk, route_query
 from generate import Generator, GenerationResult
 
 
 # ── Config defaults ────────────────────────────────────────────────────────────
 
-DB_PATH    = Path("index/chroma_db/")
+DB_PATH    = INDEX_PATH
 K_DEFAULT  = 5          # chunks to retrieve for single/temporal queries
 K_PER_ETF  = 3          # chunks per ETF for comparative queries
 
@@ -291,9 +292,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     # Eval batch options
     p.add_argument("--ground_truth", type=Path,
-                   default=Path("evaluation/ground_truth.json"))
+                   default=EVAL_DIR / "ground_truth.json")
     p.add_argument("--output",       type=Path,
-                   default=Path("evaluation/pipeline_output.json"))
+                   default=EVAL_DIR / "pipeline_output.json")
 
     # Shared
     p.add_argument("--db_path",  type=Path, default=DB_PATH)

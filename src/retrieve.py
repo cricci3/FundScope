@@ -22,7 +22,7 @@ source attribution, and the full chunk text ready for the LLM prompt.
 Usage (Python API — called from pipeline.py):
     from retrieve import Retriever
 
-    retriever = Retriever(db_path="index/chroma_db/")
+    retriever = Retriever()   # defaults to config.INDEX_PATH
 
     # Type 1 — factual
     results = retriever.single(
@@ -76,9 +76,7 @@ except ImportError:
     raise ImportError("pip install sentence-transformers")
 
 
-# ── Must match embed.py ────────────────────────────────────────────────────────
-COLLECTION_NAME = "etf_chunks"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+from config import COLLECTION_NAME, EMBEDDING_MODEL, INDEX_PATH
 
 
 # ── Result type ────────────────────────────────────────────────────────────────
@@ -191,7 +189,7 @@ class Retriever:
 
     def __init__(
         self,
-        db_path: Union[str, Path] = "index/chroma_db/",
+        db_path: Union[str, Path] = INDEX_PATH,
         model_name: str = EMBEDDING_MODEL,
         collection_name: str = COLLECTION_NAME,
     ):
@@ -210,8 +208,7 @@ class Retriever:
                 f"  Run setup first:\n"
                 f"      python setup.py\n\n"
                 f"  Or rebuild manually:\n"
-                f"      python src/embed.py --input_dir data/processed/ "
-                f"--db_path index/chroma_db/ --rebuild\n"
+                f"      python src/embed.py --rebuild\n"
             )
 
         count = self._collection.count()
@@ -453,7 +450,7 @@ def route_query(
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Query the ETF ChromaDB index")
     p.add_argument("--query",      required=True, help="Natural language query")
-    p.add_argument("--db_path",    type=Path, default=Path("index/chroma_db/"))
+    p.add_argument("--db_path",    type=Path, default=INDEX_PATH)
     p.add_argument("--mode",       default=None,
                    choices=["single", "comparative", "cross_doc"],
                    help="Retrieval mode (auto-detected if omitted)")

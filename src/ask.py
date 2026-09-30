@@ -22,10 +22,7 @@ import sys
 import argparse
 from pathlib import Path
 
-# Allow imports from src/
-ROOT    = Path(__file__).resolve().parent
-DB_PATH = ROOT / "index" / "chroma_db"
-
+from config import INDEX_PATH as DB_PATH
 from retrieve import Retriever, route_query
 from generate import Generator, build_context
 
