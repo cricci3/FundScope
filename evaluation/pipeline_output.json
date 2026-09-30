@@ -65,14 +65,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       },
       {
-        "chunk_id": "d1b897f4af636d55",
+        "chunk_id": "00c88dff71f23555",
         "text": "PASSIVE\niShares Core MSCI World UCITS ETF\nEUNL\nU.S. Dollar (Accumulating)\niShares III plc\nFebruary 2026\nPerformance, Portfolio Breakdowns, Net Assets, and Distribution Yield information as at: 28-Feb-2026. All other data as at\n04-Mar-2026.",
         "score": 0.6561,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "factsheet",
-        "year": 2023,
+        "year": 2026,
         "quarter": "Q4",
         "section_heading": "portfolio characteristics",
         "block_type": "text",
@@ -80,7 +80,7 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       }
     ],
-    "generated_answer": "The total expense ratio of the iShares Core MSCI World UCITS ETF is 0.20%. [IE00B4L5Y983 | ishares | factsheet | 2023 Q4 | section: key facts summary] and [IE00B4L5Y983 | ishares | factsheet | 2026 Q4 | section: key facts summary].",
+    "generated_answer": "The total expense ratio of the iShares Core MSCI World UCITS ETF is 0.20%. [IE00B4L5Y983 | ishares | factsheet | 2023 Q4] and [IE00B4L5Y983 | ishares | factsheet | 2026 Q4].",
     "cited_sources": [
       {
         "etf_isin": "IE00B4L5Y983",
@@ -97,7 +97,7 @@
     ],
     "chunks_used": 5,
     "input_tokens": 856,
-    "output_tokens": 81
+    "output_tokens": 69
   },
   {
     "qid": "T1_002",
@@ -346,14 +346,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       },
       {
-        "chunk_id": "ed32b052916defbe",
+        "chunk_id": "843b145961b4022a",
         "text": "ucts. It shows how likely it is that the\nproduct will lose money because of movements in the markets or because we are not able to pay you.\nWe have classified this product as 4 out of 7, which is a medium risk class. This classification rates the potential losses from future",
         "score": 0.4782,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "kid",
-        "year": 2023,
+        "year": 2026,
         "quarter": "",
         "section_heading": "what happens if",
         "block_type": "text",
@@ -361,18 +361,18 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       }
     ],
-    "generated_answer": "The Summary Risk Indicator (SRI) of the IE00B4L5Y983 KID is classified as a medium risk class, rated 4 out of 7. [IE00B4L5Y983 | ishares | kid | 2023]",
+    "generated_answer": "The product has been classified as a medium risk class, with a summary risk indicator rating of 4 out of 7. [IE00B4L5Y983 | ishares | kid | 2026]",
     "cited_sources": [
       {
         "etf_isin": "IE00B4L5Y983",
         "issuer": "ishares",
         "doc_type": "kid",
-        "year": 2023
+        "year": 2026
       }
     ],
     "chunks_used": 5,
     "input_tokens": 798,
-    "output_tokens": 57
+    "output_tokens": 46
   },
   {
     "qid": "T1_005",
@@ -440,14 +440,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       },
       {
-        "chunk_id": "89ce329856ec9f91",
+        "chunk_id": "3431dcf82fc6547e",
         "text": "ge, and best performance of the product,\nwhich may include input from benchmark(s) / proxy, over the last ten years. Markets could develop very differently in the future.\nRecommended holding period : 5 years Example Investment : USD 10,000\nScenarios If you exit after 1 year If you exit after 5 years\nMinimum There is no minimum guaranteed return. You could lose some or all of your investment.",
         "score": 0.4144,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "kid",
-        "year": 2026,
+        "year": 2023,
         "quarter": "",
         "section_heading": "what happens if",
         "block_type": "text",
@@ -540,14 +540,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       },
       {
-        "chunk_id": "4f0158553e7c4067",
+        "chunk_id": "6f630c010af3d2b3",
         "text": "iShares Core MSCI World UCITS ETF\nU.S. Dollar (Accumulating)\niShares III plc\nTOP 10 HOLDINGS (%) GEOGRAPHIC BREAKDOWN (%)\nNVIDIA CORP 5.04%\nAPPLE INC 4.55%\nMICROSOFT CORP 3.25%\nAMAZON COM INC 2.37%\nALPHABET INC CLASS A 2.13%",
         "score": 0.4806,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "factsheet",
-        "year": 2023,
+        "year": 2026,
         "quarter": "Q4",
         "section_heading": "wkn a0rpwh - -",
         "block_type": "text",
@@ -555,11 +555,11 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       }
     ],
-    "generated_answer": "The provided documents do not contain sufficient information to determine the replication method used by the iShares Core MSCI World UCITS ETF. The factsheets only provide a list of top holdings, but do not mention the underlying index or replication methodology.",
+    "generated_answer": "The provided documents do not contain sufficient information to determine the replication method used by the iShares Core MSCI World UCITS ETF. The factsheets only provide performance and portfolio breakdown data, but do not mention the specific replication methodology employed.",
     "cited_sources": [],
     "chunks_used": 5,
     "input_tokens": 774,
-    "output_tokens": 49
+    "output_tokens": 48
   },
   {
     "qid": "T1_007",
@@ -627,14 +627,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       },
       {
-        "chunk_id": "6c8c87c7948a5606",
+        "chunk_id": "266ef7d62c7b6f24",
         "text": "it fee.1 -\nOngoing costs taken each year\nManagement fees and 0.20% of the value of your investment per year. This is based on a combination of estimated 20 USD\nother administrative or and actual costs data over the last year. Any underlying product costs are included here\noperating costs with the exception of transaction costs which would be included below under 'Transaction\ncosts'.",
         "score": 0.4579,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "kid",
-        "year": 2023,
+        "year": 2026,
         "quarter": "",
         "section_heading": "other relevant information",
         "block_type": "text",
@@ -642,7 +642,7 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       }
     ],
-    "generated_answer": "The ongoing costs for IE00B4L5Y983, as stated in the KID, include a management fee of 0.20% of the value of your investment per year and transaction costs estimated at 0.00% of the value of your investment per year. [IE00B4L5Y983 | ishares | kid | 2023]",
+    "generated_answer": "The ongoing costs for IE00B4L5Y983, as stated in the KID, include a management fee of 0.20% of the value of your investment per year and transaction costs of 0.00% of the value of your investment per year.\n\n[IE00B4L5Y983 | ishares | kid | 2023]",
     "cited_sources": [
       {
         "etf_isin": "IE00B4L5Y983",
@@ -653,7 +653,7 @@
     ],
     "chunks_used": 5,
     "input_tokens": 607,
-    "output_tokens": 78
+    "output_tokens": 77
   },
   {
     "qid": "T2_001",
@@ -851,14 +851,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       },
       {
-        "chunk_id": "39dff340488c5132",
+        "chunk_id": "64a28ab3dd279c09",
         "text": "TRADING INFORMATION\nExchange Deutsche Boerse London Stock Euronext\nXetra Exchange Amsterdam\nTicker EUNL SWDA IWDA\nBloomberg EUNL GY SWDA LN IWDA NA\nTicker\nRIC EUNL.DE SWDA.L IWDA.AS\nSEDOL B91LRF8 B4L60Z9 B4T3L26\nWKN A0RPWH - -\nListing EUR GBP EUR\nCurrency\nThis product is also listed on: Bolsa Mexicana De Valores,Santiago\nStock Exchange,Borsa Italiana,SIX Swiss Exchange",
         "score": 0.2063,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "factsheet",
-        "year": 2026,
+        "year": 2023,
         "quarter": "Q4",
         "section_heading": "wkn a0rpwh - -",
         "block_type": "table",
@@ -866,7 +866,7 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       }
     ],
-    "generated_answer": "Let's compare the replication methods of IE00B4L5Y983 and IE00BD4TXV59.\n\nIE00B4L5Y983:\n[IE00B4L5Y983 | ishares | factsheet | 2026 Q4]\nThe method used for replication is not explicitly stated in this document.\n\nIE00BD4TXV59:\n[IE00BD4TXV59 | ubs | factsheet | 2023 Q4]\nThis fund uses full replication, expressed as a percentage, to replicate the benchmark over a fixed period. The more passively the investment is managed, the smaller the tracking error.\n[IE00BD4TXV59 | ubs | factsheet | 2026 Q4]\nThe method used for replication is still not explicitly stated in this document.\n\nSince neither of these documents explicitly states the replication method used by IE00B4L5Y983, we cannot make a direct comparison.",
+    "generated_answer": "Let's compare the replication methods of IE00B4L5Y983 and IE00BD4TXV59.\n\nIE00B4L5Y983:\n[IE00B4L5Y983 | ishares | factsheet | 2026 Q4] \nThe replication method for this ETF is not explicitly stated in the provided documents. However, it can be inferred that since it's a passive fund suitable for liquid indexes and has a low tracking error, it likely uses full replication.\n\nIE00BD4TXV59:\n[IE00BD4TXV59 | ubs | factsheet | 2023 Q4] \nThe replication method for this ETF is not explicitly stated in the provided documents. However, [IE00BD4TXV59 | ubs | factsheet | 2026 Q4] mentions that it uses full replication.\n\n[IE00B4L5Y983 | ishares | factsheet | 2023 Q4] \nThis document does not provide information on the replication method for IE00B4L5Y983. \n\n[IE00BD4TXV59 | ubs | factsheet | 2026 Q4] \nThis document also does not provide information on the replication method for IE00BD4TXV59.\n\nSince neither of the ETFs have explicit replication methods stated in the provided documents, it is not possible to make a direct comparison between them.",
     "cited_sources": [
       {
         "etf_isin": "IE00B4L5Y983",
@@ -885,11 +885,17 @@
         "issuer": "ubs",
         "doc_type": "factsheet",
         "year": 2026
+      },
+      {
+        "etf_isin": "IE00B4L5Y983",
+        "issuer": "ishares",
+        "doc_type": "factsheet",
+        "year": 2023
       }
     ],
     "chunks_used": 6,
     "input_tokens": 888,
-    "output_tokens": 197
+    "output_tokens": 293
   },
   {
     "qid": "T2_003",
@@ -1054,14 +1060,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       },
       {
-        "chunk_id": "f4f0d1be2995040c",
+        "chunk_id": "8f0d5601e7d861a5",
         "text": "Composition of Costs: \nOne-off costs upon entry or exit: If you exit after 1\nyear",
         "score": 0.4015,
         "etf_isin": "IE00B4L5Y983",
         "etf_ticker": "",
         "issuer": "ishares",
         "doc_type": "kid",
-        "year": 2023,
+        "year": 2026,
         "quarter": "",
         "section_heading": "other relevant information",
         "block_type": "table",
@@ -1099,14 +1105,14 @@
         "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       },
       {
-        "chunk_id": "c1ab01e58340d6c1",
+        "chunk_id": "3972d0d046b8cc4f",
         "text": "the\nExit costs USD 0\nproduct may do so.\nOngoing costs taken each year\nManagement fees and other 0.1% of the value of your investment per year. This is an estimate based on\nUSD 6\nadministrative or operating costs actual costs over the last year.\nTransaction costs USD 0\nIncidental costs taken under specific conditions\nPerformance fees There is no performance fee for this product. USD 0",
         "score": 0.369,
         "etf_isin": "IE00BD4TXV59",
         "etf_ticker": "",
         "issuer": "ubs",
         "doc_type": "kid",
-        "year": 2026,
+        "year": 2023,
         "quarter": "",
         "section_heading": "other relevant information",
         "block_type": "text",
@@ -1114,11 +1120,11 @@
         "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       }
     ],
-    "generated_answer": "Let's compare the total cost breakdown for IE00B4L5Y983 and IE00BD4TXV59.\n\n**IE00B4L5Y983 (Ishares)**\n\n* One-off costs upon entry or exit: If you exit after 1 year, USD 0\n* Ongoing costs taken each year:\n\t+ Management fees: 0.1% of the value of your investment per year\n\t+ Administrative or operating costs: estimated at USD 6 (actual costs over the last year)\n* What happens if you exit after 1 year: The figures shown include all the costs of the product itself, but may not include all the costs that you pay to your advisor or distributor. The figures do not take into account your personal tax situation, which may also affect how much you get back.\n\n**IE00BD4TXV59 (UBS)**\n\n* What happens if you exit after 1 year: The figures shown include all costs of the product itself. The figures do not take account of your personal tax situation, which can also have an impact on how much you receive back.\n* Unfavourable scenario: This type of scenario occurred for an investment between 2017 and 2022.\n* Ongoing costs taken each year:\n\t+ Management fees: 0.1% of the value of your investment per year\n\t+ Administrative or operating costs: USD 6 (actual costs over the last year)\n* Incidental costs taken under specific conditions: Performance fees, USD 0\n\nOne-sentence summary: The key difference between IE00B4L5Y983 and IE00BD4TXV59 is that UBS does not specify any additional exit costs beyond management fees and administrative costs, whereas Ishares explicitly states that there are no one-off exit costs.",
+    "generated_answer": "Let's compare the total cost breakdown for IE00B4L5Y983 and IE00BD4TXV59.\n\n**IE00B4L5Y983 (Ishares)**\n\n* One-off costs upon entry or exit: If you exit after 1 year, USD 0\n* Ongoing costs taken each year:\n\t+ Management fees and other: 0.1% of the value of your investment per year\n\t+ Administrative or operating costs: estimated at USD 6 (actual costs over the last year)\n* Transaction costs: USD 0\n* Incidental costs taken under specific conditions: Performance fees, USD 0\n\n**IE00BD4TXV59 (UBS)**\n\n* One-off costs upon entry or exit: If you exit after 1 year, USD 0\n* Ongoing costs taken each year:\n\t+ Management fees and other: 0.1% of the value of your investment per year\n\t+ Administrative or operating costs: estimated at USD 6 (actual costs over the last year)\n* Transaction costs: USD 0\n* Incidental costs taken under specific conditions: Performance fees, USD 0\n\nThe key difference between IE00B4L5Y983 and IE00BD4TXV59 is that both ETFs have identical total cost breakdowns, with no differences reported in their KIDs.",
     "cited_sources": [],
     "chunks_used": 6,
     "input_tokens": 768,
-    "output_tokens": 372
+    "output_tokens": 283
   },
   {
     "qid": "T2_006",
@@ -1579,7 +1585,7 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
       }
     ],
-    "generated_answer": "Based on the provided documents, IE00B4L5Y983 is more suitable for a cost-sensitive long-term investor.\n\nThe key reasons are:\n\n1. **Ongoing costs**: Both ETFs have the same TER/OCF of 0.20% [IE00B4L5Y983 | ishares | factsheet | 2023 Q4] and [IE00B4L5Y983 | ishares | kid | 2023]. However, IE00BD4TXV59 has a slightly higher TER/OCF of 0.20% [IE00BD4TXV59 | ubs | factsheet | 2023 Q4] and [IE00BD4TXV59 | ubs | factsheet | 2026 Q4], indicating that IE00B4L5Y983 has lower ongoing costs.\n\n2. **Replication method**: Both ETFs are benchmark-index funds, but IE00B4L5Y983 is explicitly stated to track an index (Index) [IE00B4L5Y983 | ishares | kid | 2023], whereas IE00BD4TXV59's replication method is not specified in the provided documents.\n\n3. **Risk profile**: There is no information available on the risk profile or SRI (Socially Responsible Investment) status of either ETF in the provided documents.\n\nBased on these factors, IE00B4L5Y983 appears to be more suitable for a cost-sensitive long-term investor due to its lower ongoing costs and explicit index tracking.",
+    "generated_answer": "Based on the provided documents, IE00B4L5Y983 (Ishares) appears to be more suitable for a cost-sensitive long-term investor.\n\nThe key differences between the two ETFs are:\n\n1. TER/OCF: Both ETFs have the same Total Expense Ratio (TER)/Ongoing Charges Fee of 0.20% [IE00B4L5Y983 | ishares | factsheet | 2023 Q4] and [IE00B4L5Y983 | ishares | kid | 2023].\n2. Replication method: IE00B4L5Y983 is described as an index fund, whereas IE00BD4TXV59 is a benchmark (no replication method mentioned). This suggests that IE00B4L5Y983 tracks the MSCI World Index, while IE00BD4TXV59 does not.\n3. Risk profile: There is no information on Sustainability, Responsible Investing (SRI), or Environmental, Social, and Governance (ESG) criteria for either ETF.\n\nGiven these differences, IE00B4L5Y983 appears to be a more cost-effective option with a lower risk profile, as it tracks an index rather than attempting to beat the market through active management. This makes it more suitable for a cost-sensitive long-term investor seeking stable returns with minimal fees.",
     "cited_sources": [
       {
         "etf_isin": "IE00B4L5Y983",
@@ -1592,23 +1598,11 @@
         "issuer": "ishares",
         "doc_type": "kid",
         "year": 2023
-      },
-      {
-        "etf_isin": "IE00BD4TXV59",
-        "issuer": "ubs",
-        "doc_type": "factsheet",
-        "year": 2023
-      },
-      {
-        "etf_isin": "IE00BD4TXV59",
-        "issuer": "ubs",
-        "doc_type": "factsheet",
-        "year": 2026
       }
     ],
     "chunks_used": 6,
     "input_tokens": 934,
-    "output_tokens": 321
+    "output_tokens": 277
   },
   {
     "qid": "T4_002",
@@ -1691,14 +1685,14 @@
         "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       },
       {
-        "chunk_id": "ed5faee5849143e4",
+        "chunk_id": "e96a26f87642b96c",
         "text": "UBS Core MSCI World UCITS ETF USD acc\nwith an investment in the actual underlying instrument. This Share class: An investment fund can issue several types of",
         "score": 0.562,
         "etf_isin": "IE00BD4TXV59",
         "etf_ticker": "",
         "issuer": "ubs",
         "doc_type": "factsheet",
-        "year": 2026,
+        "year": 2023,
         "quarter": "Q4",
         "section_heading": "total expense ratio",
         "block_type": "text",
@@ -1706,23 +1700,10 @@
         "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
       }
     ],
-    "generated_answer": "Based on the provided context, here are the key differences between the iShares and UBS MSCI World ETFs:\n\n1. **Cost**: \n   - iShares Core MSCI World UCITS ETF: The Total Expense Ratio (TER) is not explicitly stated in the provided chunks, but it can be inferred from the Share Class performance data [IE00B4L5Y983 | ishares | factsheet | 2023 Q4]. However, we know that the Ongoing Charges Fee (OCF) for this ETF is 0.10% p.a. as stated in [IE00BD4TXV59 | ubs | kid | 2026].\n   - UBS Core MSCI World UCITS ETF: The Total Expense Ratio (TER) is not explicitly stated, but the Ongoing Charges Fee (OCF) for this ETF is 0.09% p.a. as stated in [IE00BD4TXV59 | ubs | kid | 2026].\n\n2. **Replication Method**: \n   - iShares Core MSCI World UCITS ETF: The replication method is not explicitly stated, but it can be inferred that the fund tracks a specific index (MSCI World Index).\n   - UBS Core MSCI World UCITS ETF: The replication method is also not explicitly stated.\n\n3. **Risk Profile**: \n   - iShares Core MSCI World UCITS ETF: No information on Sustainable and Responsible Investment (SRI) is available.\n   - UBS Core MSCI World UCITS ETF: No information on SRI is available either.\n\n**Conclusion**: Based on the provided context, it appears that both ETFs have similar characteristics in terms of cost (TER/OCF), replication method, and risk profile. However, a more detailed analysis would be required to determine any specific differences between the two funds.",
-    "cited_sources": [
-      {
-        "etf_isin": "IE00B4L5Y983",
-        "issuer": "ishares",
-        "doc_type": "factsheet",
-        "year": 2023
-      },
-      {
-        "etf_isin": "IE00BD4TXV59",
-        "issuer": "ubs",
-        "doc_type": "kid",
-        "year": 2026
-      }
-    ],
+    "generated_answer": "Based on the provided context chunks:\n\n* Cost:\n\t+ UBS Core MSCI World UCITS ETF: No ongoing charges fee (OCF) is mentioned, but total expense ratio (TER) is not explicitly stated.\n\t+ iShares Core MSCI World UCITS ETF: Total Expense Ratio (TER) for 2023 Q4 is not provided, but it's mentioned that the fund has an investment in the actual underlying instrument, implying a TER might be applicable. However, no OCF is mentioned.\n* Replication method:\n\t+ UBS Core MSCI World UCITS ETF: No information on replication method is available.\n\t+ iShares Core MSCI World UCITS ETF: Manufactured by BlackRock Asset Management Ireland Limited (the \"Manager\") which is part of the BlackRock, Inc group. This implies a replication method using underlying instruments.\n* Risk profile:\n\t+ UBS Core MSCI World UCITS ETF: No information on SRI (Socially Responsible Investment) is available.\n\t+ iShares Core MSCI World UCITS ETF: No information on SRI is available.\n\nThe provided context does not contain sufficient information to determine the key differences between the two ETFs. However, it can be inferred that:\n\n* UBS Core MSCI World UCITS ETF has a lower cost structure compared to iShares Core MSCI World UCITS ETF, as no OCF is mentioned.\n* iShares Core MSCI World UCITS ETF uses a replication method using underlying instruments, whereas the UBS Core MSCI World UCITS ETF's replication method is not specified.\n* Neither ETF provides information on SRI.\n\nTherefore, it cannot be concluded that one ETF has a better cost structure or risk profile than the other based solely on the provided context.",
+    "cited_sources": [],
     "chunks_used": 6,
     "input_tokens": 875,
-    "output_tokens": 382
+    "output_tokens": 359
   }
 ]
