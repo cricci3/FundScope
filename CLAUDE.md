@@ -6,18 +6,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TODO.md` (Italian) is the project roadmap: phases 0–9, each task with the files involved and a **"Done quando"** (done when) criterion. Work rules:
 
-- **One phase at a time, in order.** Phases 1–2 fix bugs that distort the evaluation metrics, so they must be closed before judging any new model. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
+- **One phase at a time, in order.** Phases 0–1 are done. Phase 2 migrates generation to a cloud LLM (Ollama has been uninstalled and must not be reintroduced); phase 3 fixes the evaluation and sets the official baseline. Don't judge model quality before phase 3 is closed. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
 - Tick tasks `[x]` in `TODO.md` as they are completed.
-- **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation (commands below) and compare the report with the baseline (`evaluation/baseline_llama3.2-3b.json` once task 0.2 is done). Report the metric deltas before moving on.
+- **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation (commands below) and compare the report with the current reference (retrieval-only after phase 1; `evaluation/baseline_cloud.json` once task 3.7 is done). Report the metric deltas before moving on.
 - Roadmap work happens on branch `refactor/cloud-llm` (task 0.1), not `main`.
 
-Current baseline (`evaluation/report.json`, `llama3.2:3b`): retrieval recall 0.956 · precision 0.502 · faithfulness 26.7% · attribution 0.382 · unsupported claims 58.8%.
+Current reference: retrieval-only precision 0.988 · recall 1.000 (after phase 1). `evaluation/baseline_llama3.2-3b.json` is historical only (dirty index + buggy scorer) and is not comparable. The official generation baseline is set in task 3.7.
 
 ## Commands
 
 No test suite, linter or packaging yet (planned in phase 8). Scripts in `src/` import each other as top-level modules (`from retrieve import Retriever`), so run them as `python src/<script>.py` — never as `python -m`.
 
-Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13): `uv sync` creates `.venv`; prefix the commands below with `uv run` (e.g. `uv run python setup.py`). Add deps with `uv add <pkg>`. `requirements.txt` is legacy (cleanup in TODO 8.1). Ollama is not installed on this machine: use `--skip_ollama`; generation metrics can't be measured until phase 3 (cloud LLM).
+Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13): `uv sync` creates `.venv`; prefix the commands below with `uv run` (e.g. `uv run python setup.py`). Add deps with `uv add <pkg>`. `requirements.txt` is legacy (cleanup in TODO 8.1). Ollama is not installed and won't be used again: until phase 2 is done use `--skip_ollama`; after it, generation goes through a cloud provider configured in `.env` (see TODO phase 2).
 
 ```bash
 uv sync
@@ -42,7 +42,7 @@ python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipe
 
 Single question through the batch pipeline: `python src/pipeline.py --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
 
-`evaluation/run_retrieval.py` is referenced in the README but does not exist yet (TODO 2.5).
+`evaluation/run_retrieval.py` is referenced in the README but does not exist yet (TODO 3.5).
 
 ## Architecture
 
@@ -54,7 +54,7 @@ RAG over ETF factsheets and KIDs (PDF), all local: `pdfplumber` → chunks JSON 
 - **Query types** (used by `ground_truth.json`, `generate.py` prompts and `pipeline.py`): 1 factual, 2 comparative/cross-doc, 3 temporal (parked — `_parked_type3`, needs multi-year data), 4 synthetic reasoning.
 - **Generation** (`generate.py`): per-type prompt templates, `build_context`, and citation parsing; answers cite sources as `[ISIN | issuer | doc_type | year]`.
 - **Two entrypoints**: `ask.py` detects query type/ISINs with keyword rules and a hard-coded `KNOWN_ISINS`; `agent.py` lets the LLM choose tools (`search_etf_docs`, `get_live_data`, `list_available_etfs`). The roadmap (phase 4) makes the agent the only entrypoint.
-- **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall against expected sources, heuristic faithfulness, attribution, unsupported-claims check, Type 4 rubric. Known to be unreliable until phase 2 is done.
+- **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall against expected sources, heuristic faithfulness, attribution, unsupported-claims check, Type 4 rubric. Known to be unreliable until phase 3 is done.
 
 ### Paths, ids and dedup
 
@@ -65,4 +65,4 @@ RAG over ETF factsheets and KIDs (PDF), all local: `pdfplumber` → chunks JSON 
 
 ### Known pitfalls
 
-- ISIN/name/ticker maps are duplicated in `ask.py`, `agent.py` and `live_data.py`; adding an ETF means updating `metadata.json` plus these copies (until `src/registry.py`, TODO 4.4).
+- ISIN/name/ticker maps are duplicated in `ask.py`, `agent.py` and `live_data.py`; adding an ETF means updating `metadata.json` plus these copies (until `src/registry.py`, TODO 4.3).
