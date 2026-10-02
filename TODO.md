@@ -77,56 +77,58 @@ Scelte di progetto:
 - Il resto del codice (`generate.py`, `agent.py`, `evaluate.py`) usa **solo un'interfaccia neutra** e non sa quale provider c'è sotto.
 - Modelli di default: generazione/agent `claude-haiku-4-5-20251001` (1 $ / 5 $ per M token in/out); judge della fase 3 `claude-sonnet-5-5` (2 $ / 10 $). Verificare gli identificativi nella documentazione Anthropic prima di fissarli in `.env.example`.
 
-- [ ] **2.1 Interfaccia LLM neutra** — nuovo pacchetto/modulo `src/llm/` (o `src/llm.py` se resta piccolo):
+- [x] **2.1 Interfaccia LLM neutra** — nuovo pacchetto/modulo `src/llm/` (o `src/llm.py` se resta piccolo):
   - Tipi neutri: `Message(role, content, tool_calls?, tool_call_id?)`, `ToolSpec(name, description, parameters_json_schema)`, `ToolCall(id, name, arguments: dict)`, `LLMResponse(text, tool_calls, usage: Usage(input_tokens, output_tokens, cache_read_tokens, cache_write_tokens), model, provider, stop_reason)`.
   - Interfaccia `LLMClient` con un solo metodo: `chat(messages, *, system=None, tools=None, temperature=0.0, max_tokens=1024) -> LLMResponse`.
   - Factory `get_llm(role="generator"|"judge") -> LLMClient` che legge la configurazione (2.4).
   - Done quando: `generate.py` e `agent.py` possono essere scritti senza importare né `openai` né `anthropic`.
 
-- [ ] **2.2 Backend Anthropic (nativo, default)** — `AnthropicClient(LLMClient)`:
+- [x] **2.2 Backend Anthropic (nativo, default)** — `AnthropicClient(LLMClient)`:
   - `uv add anthropic`; `anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)` → `client.messages.create(...)`.
   - Conversione formati: `system` come parametro separato (non come messaggio); tool definiti con `input_schema`; risposta con blocchi `text` / `tool_use` → `LLMResponse`; risultati dei tool inviati come blocchi `tool_result` in un messaggio `user`.
   - Gestione errori: retry con backoff su 429/529/5xx (`anthropic.RateLimitError`, `APIStatusError`); errore chiaro su credito esaurito / chiave non valida (non ritentare).
   - Prompt caching sul blocco `system` + definizioni dei tool (si ripetono a ogni iterazione dell'agent): `cache_control` sull'ultimo blocco stabile. Verificare nella documentazione la soglia minima di token cacheabili per Haiku; se il prompt è sotto soglia, lasciare il codice pronto ma senza effetto.
   - Done quando: `uv run python -m ... --ping` (o `uv run python src/llm/cli.py --ping`) risponde con Haiku e stampa token e costo.
 
-- [ ] **2.3 Backend OpenAI-compatibile (provider alternativi)** — `OpenAICompatClient(LLMClient)`:
+- [x] **2.3 Backend OpenAI-compatibile (provider alternativi)** — `OpenAICompatClient(LLMClient)`:
   - Registro provider: `{"groq": "https://api.groq.com/openai/v1", "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/", "openrouter": "https://openrouter.ai/api/v1"}`; aggiungere un provider = una riga.
   - Conversione tool/messaggi da/verso il formato OpenAI (`tools=[{"type":"function",...}]`, `message.tool_calls`, ruolo `tool`).
   - Decidere sui tool call con `if message.tool_calls:` (non `finish_reason`), gestire `content is None`.
   - Done quando: lo stesso `--ping` funziona con `LLM_PROVIDER=groq` (se si dispone di una chiave; altrimenti coperto da test mockati in 8.5).
+  - *Esito (02/10/2026): nessuna chiave Groq disponibile; conversione messaggi/tool, argomenti malformati, `content=None` e usage verificati con client mockato. Test permanenti in 8.5.*
 
-- [ ] **2.4 Configurazione e `.env`**
+- [x] **2.4 Configurazione e `.env`**
   - Variabili: `LLM_PROVIDER` (default `anthropic`), `LLM_MODEL`, `JUDGE_PROVIDER`, `JUDGE_MODEL`, chiavi **per provider** `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` (così si cambia provider cambiando solo `LLM_PROVIDER`/`LLM_MODEL`), `LLM_MIN_INTERVAL_S`, `LLM_MAX_COST_USD`.
   - `config.py` carica `.env` con `python-dotenv`; `.env.example` committato senza chiavi; verificare che `.env` sia in `.gitignore` e **mai** committato.
   - Precedenza: flag CLI `--provider` / `--model` > variabili d'ambiente > default in `config.py`.
   - Done quando: passare da Claude a un altro provider richiede solo di modificare `.env` (o un flag CLI).
 
-- [ ] **2.5 Tracciamento costi e protezione del credito** (credito disponibile: 5 $)
+- [x] **2.5 Tracciamento costi e protezione del credito** (credito disponibile: 5 $)
   - Tabella prezzi per modello in `config.py` (o `src/llm/pricing.py`), facilmente aggiornabile; prezzo sconosciuto → costo `null` + warning, non errore.
   - Ogni `LLMResponse` accumula token e costo stimato in un contatore di sessione; `ask.py`/`agent.py` mostrano il costo della domanda con `--show_cost`; `pipeline.py` e `evaluate.py` stampano il totale a fine run.
   - Budget per run: se il costo stimato supera `LLM_MAX_COST_USD` (default 0.50) la run si interrompe salvando i risultati parziali.
   - `pipeline.py` / `evaluate.py`: opzioni `--limit N` e `--qids T1_001 T2_003 …` per lavorare su sottoinsiemi durante lo sviluppo.
   - Done quando: ogni run riporta token e costo; una run oltre budget si ferma senza perdere i risultati già ottenuti.
 
-- [ ] **2.6 Rimuovere Ollama e usare l'interfaccia in `generate.py`, `agent.py`, `ask.py`, `pipeline.py`**
+- [x] **2.6 Rimuovere Ollama e usare l'interfaccia in `generate.py`, `agent.py`, `ask.py`, `pipeline.py`**
   - Eliminare `OLLAMA_BASE_URL`, `DEFAULT_MODEL = "llama3.2:3b"` / `"mistral:7b"`, `_check_connection` / `_check_model`, ogni `OpenAI(...)` diretto.
   - `agent.py`: `TOOLS` riscritti come `ToolSpec` neutri; il loop usa `LLMResponse.tool_calls`; argomenti malformati → errore restituito al modello come risultato del tool; history dei messaggi in formato neutro.
   - Done quando: `grep -rniE "ollama|11434|llama3\.2|mistral:7b|from openai|import anthropic" src/` trova solo i file dei backend in `src/llm/`.
 
-- [ ] **2.7 Aggiornare `setup.py`**
+- [x] **2.7 Aggiornare `setup.py`**
   - Rimuovere `check_ollama`, `--skip_ollama`, `--model` e i messaggi su `ollama pull`; aggiungere `anthropic` alla lista dei pacchetti verificati.
   - Nuovo check: chiave del provider configurato presente + chiamata `--ping` minima (pochi token); se fallisce, l'indice viene comunque costruito e il setup segnala la modalità retrieval-only.
   - Done quando: `uv run python setup.py` gira da zero senza alcun riferimento a Ollama.
 
-- [ ] **2.8 Metadati della run** — `pipeline_output.json` salva `provider`, `model`, timestamp, token (input/output/cache) e costo stimato per domanda e totale (oggi `model` è `None`).
+- [x] **2.8 Metadati della run** — `pipeline_output.json` salva `provider`, `model`, timestamp, token (input/output/cache) e costo stimato per domanda e totale (oggi `model` è `None`).
 
-- [ ] **2.9 Smoke test end-to-end (economico)**
+- [x] **2.9 Smoke test end-to-end (economico)**
   - `uv run python src/ask.py --query "What is the TER of the iShares Core MSCI World ETF?" --show_cost` + una domanda comparativa + `agent.py --show_calls` su una domanda che usa `get_live_data`.
   - Pipeline su `--limit 3`, poi sulle 17 domande una sola volta; output in `evaluation/runs/` (non sovrascrivere).
   - Done quando: tutte le 17 domande producono una risposta senza errori; costo totale riportato. Le metriche **non** sono ancora affidabili (fase 3).
+  - *Esito (02/10/2026): 17/17 risposte senza errori con Haiku 4.5, 14 623 token in + 2 606 out, costo stimato 0,028 $ → `evaluation/runs/20261002T132512Z_claude-haiku-4-5.json`. Retrieval invariato (P 0.988 · R 1.000). Agent: tool loop OK; Yahoo Finance non raggiungibile dalla sandbox, errore gestito.*
 
-- [ ] **2.10 Documentazione: `README.md`** — nuova sezione **"LLM provider"** (sostituisce "Ollama" e aggiorna "Prerequisites"):
+- [x] **2.10 Documentazione: `README.md`** — nuova sezione **"LLM provider"** (sostituisce "Ollama" e aggiorna "Prerequisites"):
   - provider di default (Claude Haiku 4.5 via API Anthropic) e come ottenere/inserire la chiave (`cp .env.example .env`);
   - tabella delle variabili d'ambiente (2.4) con esempi;
   - **come cambiare provider**: esempio completo di `.env` per Anthropic e per Groq/Gemini/OpenRouter, e override da CLI (`--provider`, `--model`);
