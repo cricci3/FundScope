@@ -30,6 +30,9 @@ MAX_RETRIES = 5
 _NO_SAMPLING_PREFIXES = ("claude-opus-4-7", "claude-opus-4-8", "claude-opus-5",
                          "claude-sonnet-5", "claude-fable", "claude-mythos")
 
+# Models that reject output_config.effort (400).
+_NO_EFFORT_PREFIXES = ("claude-haiku-4-5", "claude-sonnet-4-5")
+
 
 class AnthropicClient(LLMClient):
     provider = "anthropic"
@@ -77,7 +80,8 @@ class AnthropicClient(LLMClient):
 
     # ── Call ───────────────────────────────────────────────────────────────────
 
-    def _chat(self, messages, *, system, tools, temperature, max_tokens) -> LLMResponse:
+    def _chat(self, messages, *, system, tools, temperature, max_tokens,
+              response_schema, effort) -> LLMResponse:
         kwargs = {
             "model": self.model,
             "max_tokens": max_tokens,
@@ -90,6 +94,14 @@ class AnthropicClient(LLMClient):
             kwargs["tools"] = self._to_api_tools(tools)
         if not self.model.startswith(_NO_SAMPLING_PREFIXES):
             kwargs["extra_body"] = {"temperature": temperature}
+
+        output_config = {}
+        if response_schema:
+            output_config["format"] = {"type": "json_schema", "schema": response_schema}
+        if effort and not self.model.startswith(_NO_EFFORT_PREFIXES):
+            output_config["effort"] = effort
+        if output_config:
+            kwargs["output_config"] = output_config
 
         try:
             resp = self._client.messages.create(**kwargs)

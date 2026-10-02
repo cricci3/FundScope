@@ -154,7 +154,15 @@ class LLMClient(ABC):
         tools: Optional[list] = None,
         temperature: float = 0.0,
         max_tokens: int = 1024,
+        response_schema: Optional[dict] = None,
+        effort: Optional[str] = None,
     ) -> LLMResponse:
+        """
+        response_schema: JSON Schema the reply text must follow (structured
+            output, enforced by the provider where supported). Parse resp.text.
+        effort: reasoning-effort hint ("low" | "medium" | "high"), ignored by
+            providers/models that do not support it.
+        """
         SESSION.check_budget()
 
         wait = self._min_interval_s - (time.monotonic() - self._last_call)
@@ -163,11 +171,13 @@ class LLMClient(ABC):
         self._last_call = time.monotonic()
 
         response = self._chat(messages, system=system, tools=tools or [],
-                              temperature=temperature, max_tokens=max_tokens)
+                              temperature=temperature, max_tokens=max_tokens,
+                              response_schema=response_schema, effort=effort)
         response.cost_usd = estimate_cost(response.model or self.model, response.usage)
         SESSION.record(response)
         return response
 
     @abstractmethod
-    def _chat(self, messages, *, system, tools, temperature, max_tokens) -> LLMResponse:
+    def _chat(self, messages, *, system, tools, temperature, max_tokens,
+              response_schema, effort) -> LLMResponse:
         ...

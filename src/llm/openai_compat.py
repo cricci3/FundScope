@@ -63,7 +63,9 @@ class OpenAICompatClient(LLMClient):
 
     # ── Call ───────────────────────────────────────────────────────────────────
 
-    def _chat(self, messages, *, system, tools, temperature, max_tokens) -> LLMResponse:
+    def _chat(self, messages, *, system, tools, temperature, max_tokens,
+              response_schema, effort) -> LLMResponse:
+        # `effort` is ignored: reasoning controls differ per provider.
         kwargs = {
             "model": self.model,
             "messages": self._to_api_messages(messages, system),
@@ -73,6 +75,12 @@ class OpenAICompatClient(LLMClient):
         if tools:
             kwargs["tools"] = self._to_api_tools(tools)
             kwargs["tool_choice"] = "auto"
+        if response_schema:
+            # Not every provider enforces the schema; callers must still validate.
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "response", "schema": response_schema, "strict": True},
+            }
 
         try:
             resp = self._client.chat.completions.create(**kwargs)
