@@ -6,13 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TODO.md` (Italian) is the project roadmap: phases 0–9, each task with the files involved and a **"Done quando"** (done when) criterion. Work rules:
 
-- **One phase at a time, in order.** Phases 0–2 are done (phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `src/llm/` interface; Ollama has been uninstalled and must not be reintroduced). Phase 3 fixes the evaluation and sets the official baseline. Don't judge model quality before phase 3 is closed. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
+- **One phase at a time, in order.** Phases 0–3 are done (phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `src/llm/` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline). Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
 - Tick tasks `[x]` in `TODO.md` as they are completed.
-- **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation (commands below) and compare the report with the current reference (retrieval-only after phase 1; `evaluation/baseline_cloud.json` once task 3.7 is done). Report the metric deltas before moving on.
+- **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation with the judge (`--judge llm --compare evaluation/baseline_cloud.json`) and report the metric deltas against the baseline before moving on.
 - **Work only on `main` — never create branches.** Commit after each completed task, with a message that starts with the task number (e.g. `2.3: OpenAI-compatible backend`); push to `origin/main` at the end of each phase.
 - **The LLM provider is Claude via the Anthropic API, with limited prepaid credit (~5 $).** Never hard-code a provider or model outside `src/llm/` and `config.py`. During development run the pipeline/evaluation on subsets (`--limit`, `--qids`); run the full 17-question evaluation only at the end of a phase, and always report the cost of each run.
 
-Current reference: retrieval-only precision 0.988 · recall 1.000 (after phase 1, unchanged after phase 2). Phase-2 smoke run (Haiku 4.5, 17/17 answered, $0.028): `evaluation/runs/20261002T132512Z_claude-haiku-4-5.json` — its generation metrics are not meaningful until phase 3. `evaluation/baseline_llama3.2-3b.json` is historical only (dirty index + buggy scorer) and is not comparable. The official generation baseline is set in task 3.7.
+Current reference: **`evaluation/baseline_cloud.json`** (task 3.7; Haiku 4.5 generator, Sonnet 5.5 judge, 17 questions): judge verdict pass 0.353 · judge correctness 0.467 · grounded 0.824 · abstained 0.353 · attribution 0.882 · retrieval precision 0.988 / recall 1.000 (document-level). Cost of a full run + judge ≈ 0.12 $. Most failures are abstentions: the right document is retrieved but not the chunk holding the value. `evaluation/baseline_llama3.2-3b.json` is historical only and not comparable.
 
 ## Commands
 
@@ -44,27 +44,27 @@ python src/live_data.py --isin IE00B4L5Y983                         # yfinance m
 # Evaluation (17 ground-truth questions). Output defaults to evaluation/runs/<UTC ts>_<model>.json
 # During development use --limit N / --qids ...; run all 17 only at the end of a phase and report the cost.
 python src/pipeline.py --run_eval [--limit 3] [--qids T1_001 T2_003] [--output ...]
-python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/runs/<run>.json --report evaluation/report.json [--retrieval_only] [--limit N] [--qids ...]
+python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/runs/<run>.json --report evaluation/report.json [--judge heuristic|llm] [--compare evaluation/baseline_cloud.json] [--retrieval_only] [--limit N] [--qids ...]
+python evaluation/run_retrieval.py [--limit N]          # retrieval only, no LLM; score with --retrieval_only
 ```
 
 Single question through the batch pipeline: `python src/pipeline.py --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
 
-`evaluation/run_retrieval.py` is referenced in the README but does not exist yet (TODO 3.5).
 
 ## Architecture
 
 RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `all-MiniLM-L6-v2` embeddings → ChromaDB (all local) → cloud LLM through `src/llm/` (default Claude Haiku 4.5 via the Anthropic API).
 
-- **`src/llm/`** is the only place that imports `anthropic` / `openai`. `base.py` has the neutral types (`Message`, `ToolSpec`, `ToolCall`, `Usage`, `LLMResponse`), the `LLMClient` interface (one method, `chat(messages, *, system, tools, temperature, max_tokens)`), and the process-wide `SESSION` cost tracker that enforces `LLM_MAX_COST_USD` (raises `BudgetExceededError`). `get_llm(role="generator"|"judge", provider, model)` in `__init__.py` builds the client. Backends: `anthropic_backend.py` (native SDK; SDK 1.x has no `temperature` kwarg, so it goes via `extra_body` for models that accept it; cache breakpoint on the system block — Haiku 4.5 only caches prefixes ≥ 4096 tokens) and `openai_compat.py` (one-line registry `OPENAI_COMPAT_PROVIDERS`, key from `<NAME>_API_KEY`). Prices in `pricing.py` (unknown model → cost `None`).
+- **`src/llm/`** is the only place that imports `anthropic` / `openai`. `chat()` also takes `response_schema` (structured JSON output) and `effort` (ignored where unsupported; Haiku 4.5 rejects it, Sonnet 5.5 rejects `temperature`). `base.py` has the neutral types (`Message`, `ToolSpec`, `ToolCall`, `Usage`, `LLMResponse`), the `LLMClient` interface (one method, `chat(messages, *, system, tools, temperature, max_tokens)`), and the process-wide `SESSION` cost tracker that enforces `LLM_MAX_COST_USD` (raises `BudgetExceededError`). `get_llm(role="generator"|"judge", provider, model)` in `__init__.py` builds the client. Backends: `anthropic_backend.py` (native SDK; SDK 1.x has no `temperature` kwarg, so it goes via `extra_body` for models that accept it; cache breakpoint on the system block — Haiku 4.5 only caches prefixes ≥ 4096 tokens) and `openai_compat.py` (one-line registry `OPENAI_COMPAT_PROVIDERS`, key from `<NAME>_API_KEY`). Prices in `pricing.py` (unknown model → cost `None`).
 - In agent loops append `response.to_message()` (not a hand-built message): it carries the provider-native content (`raw`) that the backend replays verbatim.
 
 - **`src/metadata.json`** is the document registry: PDF filename → `isin`, `issuer`, `category`, `type` (factsheet|kid), `year`, … `ingest.py` attaches these to every chunk; output files in `data/processed/` are named by `build_output_stem` (e.g. `IE00B4L5Y983_2026_kid.json`).
-- **Chunking** (`ingest.py`): per-doc-type sizes (factsheet 250 chars, KID 400); tables kept whole; a synthetic "key facts" chunk per document. Chunk ids come from `make_chunk_id`.
+- **Chunking** (`ingest.py`): per-doc-type sizes from `config.CHUNK_SIZES` / `CHUNK_OVERLAPS` (factsheet 250 chars, KID 400); tables kept whole; a synthetic "key facts" chunk per document. Chunk ids come from `make_chunk_id`.
 - **Retrieval** (`retrieve.py`): `Retriever` has three modes — `single` (metadata-filtered search), `comparative` (top-k per ISIN, then merged, so one ETF can't dominate), `cross_document` (top-k per doc_type for one ISIN). `route_query` dispatches between them. Filters are built by `_build_where`.
 - **Query types** (used by `ground_truth.json`, `generate.py` prompts and `pipeline.py`): 1 factual, 2 comparative/cross-doc, 3 temporal (parked — `_parked_type3`, needs multi-year data), 4 synthetic reasoning.
 - **Generation** (`generate.py`): per-type prompt templates, `build_context`, and citation parsing; answers cite sources as `[ISIN | issuer | doc_type | year]`.
 - **Two entrypoints**: `ask.py` detects query type/ISINs with keyword rules and a hard-coded `KNOWN_ISINS`; `agent.py` lets the LLM choose tools (`search_etf_docs`, `get_live_data`, `list_available_etfs`). The roadmap (phase 4) makes the agent the only entrypoint.
-- **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall against expected sources, heuristic faithfulness, attribution, unsupported-claims check, Type 4 rubric. Known to be unreliable until phase 3 is done.
+- **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall (document-level: a chunk counts if its isin+doc_type+year match a source), attribution, and heuristics driven by `ground_truth.json` — `expected_values` (Type 1: list; Type 2: dict label → values, ISIN labels are checked in the part of the answer about that ETF; values are strings or lists of alternatives, numbers compared numerically), Type 4 rubric items `{item, keywords, min_match}`, unsupported numbers, abstention. Sentences that say information is missing are dropped before matching. `--judge llm` adds `evaluation/judge.py`: one call per question to `get_llm("judge")` (Sonnet 5.5, `JUDGE_EFFORT`), JSON enforced via `response_schema` and re-validated → correctness / grounded / rubric / verdict / reasoning in the report. The judge is the primary quality metric; heuristics are a free fallback. Reports carry `meta` (models, judge, chunk sizes, embedding model) and `--compare` prints deltas.
 
 ### Paths, ids and dedup
 

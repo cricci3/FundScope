@@ -131,6 +131,7 @@ python src/llm/cli.py --ping
 | `LLM_MODEL` | provider default (`claude-haiku-4-5` for anthropic) | Model id. **Required** for providers other than anthropic |
 | `JUDGE_PROVIDER` | `anthropic` | Provider for the LLM-as-judge used by the evaluation (phase 3) |
 | `JUDGE_MODEL` | provider default (`claude-sonnet-5-5` for anthropic) | Judge model id |
+| `JUDGE_EFFORT` | `medium` | Reasoning effort of the judge (`low` / `medium` / `high`; ignored by models without effort control) |
 | `ANTHROPIC_API_KEY` | — | Key for `anthropic` |
 | `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | — | Key for that provider; only the one in use is needed |
 | `LLM_MAX_COST_USD` | `0.50` | Budget per run: a run stops (keeping its partial results) once the estimated cost reaches it |
@@ -194,7 +195,7 @@ Optionally add the model's prices to `src/llm/pricing.py`; models without a pric
 Indicative prices (per million tokens, input / output): Claude Haiku 4.5 $1 / $5, Claude Sonnet 5.5 $2 / $10. A typical answer uses ~1,000 input and ~100–350 output tokens, i.e. **≈ $0.001–0.003 per question**; the full 17-question evaluation costs ≈ $0.03 with Haiku 4.5.
 
 - `--show_cost` on `ask.py` / `agent.py` prints the tokens and estimated cost of every answer.
-- `pipeline.py` and `evaluate.py` print the run total; each run file stores per-question and total tokens and cost.
+- `pipeline.py` and `evaluate.py` print the run total (pipeline + judge); each run file stores per-question and total tokens and cost.
 - `LLM_MAX_COST_USD` caps what one run can spend.
 - `pipeline.py --limit N` / `--qids T1_001 T2_003` run only a subset — use them while developing.
 
@@ -367,7 +368,33 @@ python evaluation/evaluate.py \
 
 Each run file has the form `{"run": {provider, model, timestamps, status, totals}, "results": [...]}`, with tokens and estimated cost per question and in total.
 
-To score retrieval only (faithfulness and attribution skipped), add `--retrieval_only` to `evaluate.py`.
+### What is measured
+
+- **Retrieval** precision/recall@k: is the right document (ISIN + doc type + year) retrieved?
+- **Attribution**: are the right sources cited?
+- **Heuristics** (free, no API calls), driven by `ground_truth.json`: expected key values found in the answer (`expected_values`, per ETF for comparisons), Type 4 rubric keywords, figures absent from the retrieved context, abstentions ("the documents do not contain…").
+- **LLM judge** (`--judge llm`): a different model from the generator (default Claude Sonnet 5.5, `JUDGE_PROVIDER` / `JUDGE_MODEL` / `JUDGE_EFFORT` in `.env`) rates each answer's correctness against the reference, groundedness in the retrieved context and the rubric, and gives a pass / partial / fail verdict with a short motivation. This is the primary quality metric; it costs ≈ $0.005 per question.
+
+```bash
+# Score with the judge and compare with the official baseline
+python evaluation/evaluate.py \
+    --ground_truth evaluation/ground_truth.json \
+    --pipeline_output evaluation/runs/<run>.json \
+    --report evaluation/report.json \
+    --judge llm --compare evaluation/baseline_cloud.json
+```
+
+The official baseline is `evaluation/baseline_cloud.json` (Haiku 4.5 answers judged by Sonnet 5.5): judge pass 35%, correctness 47%, grounded 82%, retrieval precision 0.99 / recall 1.00. Each report records the models, judge, chunk sizes and embedding model it was produced with, so reports stay comparable.
+
+### Retrieval only (no LLM, no cost)
+
+```bash
+python evaluation/run_retrieval.py
+python evaluation/evaluate.py \
+    --ground_truth evaluation/ground_truth.json \
+    --pipeline_output evaluation/runs/<timestamp>_retrieval-only.json \
+    --retrieval_only
+```
 
 The report breaks down scores by query type (factual, comparative, synthetic) and difficulty (easy, medium, hard).
 
