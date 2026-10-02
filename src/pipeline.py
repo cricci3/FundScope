@@ -6,14 +6,20 @@ Wires retrieve.py → generate.py into a single entry point.
 Accepts a question, routes to the correct retrieval mode,
 calls the LLM, and returns a structured response.
 
-Output format is exactly what evaluate.py expects:
+Batch output (--run_eval) is what evaluate.py expects:
+    {
+      "run":     {provider, model, timestamps, status, totals (tokens + cost)},
+      "results": [ one entry per question, as below ]
+    }
     {
       "qid":               "T1_001",
       "question":          "...",
       "query_type":        1,
       "retrieved_chunks":  [...],   ← list of chunk dicts with metadata
       "generated_answer":  "...",
-      "cited_sources":     [...]    ← parsed from answer text
+      "cited_sources":     [...],   ← parsed from answer text
+      "provider", "model", "input_tokens", "output_tokens",
+      "cache_read_tokens", "cache_write_tokens", "cost_usd"
     }
 
 Usage:
@@ -28,10 +34,15 @@ Usage:
                        --isin_list IE00B4L5Y983 IE00BD4TXV59 \
                        --doc_type factsheet --query_type 2
 
-    # Run all ground truth questions and save output for evaluate.py
-    python src/pipeline.py --run_eval \
-                       --ground_truth evaluation/ground_truth.json \
-                       --output      evaluation/pipeline_output.json
+    # Run all ground truth questions; output goes to evaluation/runs/<timestamp>_<model>.json
+    python src/pipeline.py --run_eval
+
+    # Development: only a subset (keeps the API cost low)
+    python src/pipeline.py --run_eval --limit 3
+    python src/pipeline.py --run_eval --qids T1_001 T2_003
+
+    # Explicit output path
+    python src/pipeline.py --run_eval --output evaluation/pipeline_output.json
 
     # Then score:
     python evaluate.py --ground_truth evaluation/ground_truth.json \
@@ -42,12 +53,14 @@ Usage:
 import json
 import argparse
 from dataclasses import dataclass, asdict, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from config import INDEX_PATH, EVAL_DIR
 from retrieve import Retriever, RetrievedChunk, route_query
 from generate import Generator, GenerationResult
+from llm import PROVIDERS, SESSION, BudgetExceededError
 
 
 # ── Config defaults ────────────────────────────────────────────────────────────
@@ -68,8 +81,13 @@ class PipelineResult:
     generated_answer: str
     cited_sources: list[dict]        # serialisable dicts for evaluate.py
     chunks_used: int = 0
+    provider: str = ""
+    model: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    cost_usd: Optional[float] = None
 
 
 # ── Query type inference ───────────────────────────────────────────────────────
@@ -173,12 +191,72 @@ def run_query(
         generated_answer=result.answer,
         cited_sources=[asdict(s) for s in result.cited_sources],
         chunks_used=result.chunks_used,
+        provider=result.provider,
+        model=result.model,
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
+        cache_read_tokens=result.cache_read_tokens,
+        cache_write_tokens=result.cache_write_tokens,
+        cost_usd=result.cost_usd,
     )
 
 
 # ── Batch evaluation runner ────────────────────────────────────────────────────
+
+def select_questions(
+    questions: list[dict],
+    qids: Optional[list[str]] = None,
+    limit: Optional[int] = None,
+) -> list[dict]:
+    """Restrict the ground-truth questions to --qids (in file order) and/or the first --limit."""
+    if qids:
+        known   = {q["qid"] for q in questions}
+        unknown = [qid for qid in qids if qid not in known]
+        if unknown:
+            raise SystemExit(f"Unknown qids: {unknown}")
+        questions = [q for q in questions if q["qid"] in set(qids)]
+    if limit is not None:
+        questions = questions[:limit]
+    return questions
+
+
+def default_output_path(generator: Generator) -> Path:
+    """evaluation/runs/<UTC timestamp>_<model>.json — never overwrites a previous run."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    model = generator.model.replace("/", "-").replace(":", "-")
+    return EVAL_DIR / "runs" / f"{stamp}_{model}.json"
+
+
+def _run_metadata(generator: Generator, started: str, results: list, status: str) -> dict:
+    priced = [r.cost_usd for r in results if r.cost_usd is not None]
+    return {
+        "provider":    generator.provider,
+        "model":       generator.model,
+        "started_at":  started,
+        "finished_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "status":      status,     # running | complete | partial (budget) | partial (interrupted)
+        "n_questions": len(results),
+        "totals": {
+            "input_tokens":       sum(r.input_tokens for r in results),
+            "output_tokens":      sum(r.output_tokens for r in results),
+            "cache_read_tokens":  sum(r.cache_read_tokens for r in results),
+            "cache_write_tokens": sum(r.cache_write_tokens for r in results),
+            "cost_usd":           round(sum(priced), 6) if priced else None,
+            "unpriced_questions": len(results) - len(priced),
+        },
+        "budget_usd": SESSION.max_cost_usd,
+    }
+
+
+def _save(output_path: Path, generator: Generator, started: str,
+          results: list, status: str) -> None:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "run":     _run_metadata(generator, started, results, status),
+        "results": [asdict(r) for r in results],
+    }
+    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=True), encoding="utf-8")
+
 
 def run_eval_batch(
     ground_truth_path: Path,
@@ -186,67 +264,75 @@ def run_eval_batch(
     retriever: Retriever,
     generator: Generator,
     k: int = K_DEFAULT,
-    skip_filled: bool = True,
+    qids: Optional[list[str]] = None,
+    limit: Optional[int] = None,
 ) -> list[PipelineResult]:
     """
-    Run the pipeline over every active question in ground_truth.json.
-    Writes results to output_path in the format evaluate.py expects.
+    Run the pipeline over the active questions in ground_truth.json
+    (optionally only --qids / the first --limit).
 
-    skip_filled=True skips questions whose expected_answer still has <FILL>
-    (they can't be auto-scored anyway, but you may still want answers for them).
+    The output file is rewritten after every question, so a run stopped by the
+    budget (LLM_MAX_COST_USD) or by Ctrl+C keeps every answer obtained so far.
     """
     gt = json.loads(ground_truth_path.read_text(encoding="utf-8"))
-    questions = gt["questions"]   # only active questions, not _parked_type3
+    questions = select_questions(gt["questions"], qids, limit)   # not _parked_type3
 
     results: list[PipelineResult] = []
-    total = len(questions)
+    total   = len(questions)
+    started = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    status  = "complete"
 
-    for i, q in enumerate(questions, 1):
-        qid        = q["qid"]
-        question   = q["question"]
-        query_type = q["query_type"]
-        hint       = q.get("metadata_filter_hint") or {}
-        expected   = q.get("expected_answer", "")
+    try:
+        for i, q in enumerate(questions, 1):
+            qid        = q["qid"]
+            question   = q["question"]
+            query_type = q["query_type"]
+            hint       = q.get("metadata_filter_hint") or {}
 
-        # Derive isin_list from sources or hint
-        isin_list = _extract_isin_list(q)
+            # Derive isin_list from sources or hint
+            isin_list = _extract_isin_list(q)
 
-        print(f"\n[{i}/{total}] {qid} (type {query_type}) — {question[:60]}...")
+            print(f"\n[{i}/{total}] {qid} (type {query_type}) — {question[:60]}...")
 
-        try:
-            result = run_query(
-                question=question,
-                retriever=retriever,
-                generator=generator,
-                qid=qid,
-                query_type=query_type,
-                isin_list=isin_list,
-                metadata_filter_hint=hint,
-                k=k,
-            )
-            results.append(result)
-            print(f"  ✓ {len(result.retrieved_chunks)} chunks retrieved, "
-                  f"{result.input_tokens}+{result.output_tokens} tokens")
-        except Exception as e:
-            print(f"  ✗ ERROR: {e}")
-            # Insert an empty result so evaluate.py doesn't mark it as missing
-            results.append(PipelineResult(
-                qid=qid,
-                question=question,
-                query_type=query_type,
-                retrieved_chunks=[],
-                generated_answer=f"ERROR: {e}",
-                cited_sources=[],
-            ))
+            try:
+                result = run_query(
+                    question=question,
+                    retriever=retriever,
+                    generator=generator,
+                    qid=qid,
+                    query_type=query_type,
+                    isin_list=isin_list,
+                    metadata_filter_hint=hint,
+                    k=k,
+                )
+                results.append(result)
+                cost = f"${result.cost_usd:.5f}" if result.cost_usd is not None else "n/a"
+                print(f"  ✓ {len(result.retrieved_chunks)} chunks retrieved, "
+                      f"{result.input_tokens}+{result.output_tokens} tokens, {cost}")
+            except BudgetExceededError:
+                raise
+            except Exception as e:
+                print(f"  ✗ ERROR: {e}")
+                # Insert an empty result so evaluate.py doesn't mark it as missing
+                results.append(PipelineResult(
+                    qid=qid,
+                    question=question,
+                    query_type=query_type,
+                    retrieved_chunks=[],
+                    generated_answer=f"ERROR: {e}",
+                    cited_sources=[],
+                ))
+            _save(output_path, generator, started, results, "running")
+    except BudgetExceededError as e:
+        status = "partial (budget)"
+        print(f"\n[pipeline] STOPPED: {e}")
+    except KeyboardInterrupt:
+        status = "partial (interrupted)"
+        print("\n[pipeline] Interrupted.")
 
-    # Save
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    records = [asdict(r) for r in results]
-    output_path.write_text(
-        json.dumps(records, indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
-    print(f"\n[pipeline] Saved {len(results)} results → {output_path}")
+    _save(output_path, generator, started, results, status)
+    print(f"\n[pipeline] Saved {len(results)}/{total} results ({status}) → {output_path}")
+    print(f"[pipeline] Total: {SESSION.summary()}")
     return results
 
 
@@ -293,10 +379,18 @@ def build_parser() -> argparse.ArgumentParser:
     # Eval batch options
     p.add_argument("--ground_truth", type=Path,
                    default=EVAL_DIR / "ground_truth.json")
-    p.add_argument("--output",       type=Path,
-                   default=EVAL_DIR / "pipeline_output.json")
+    p.add_argument("--output",       type=Path, default=None,
+                   help="Default: evaluation/runs/<timestamp>_<model>.json")
+    p.add_argument("--qids",         nargs="+", default=None,
+                   help="Only run these question ids (e.g. T1_001 T2_003)")
+    p.add_argument("--limit",        type=int, default=None,
+                   help="Only run the first N (selected) questions")
 
     # Shared
+    p.add_argument("--provider", default=None, choices=PROVIDERS,
+                   help="LLM provider (default: LLM_PROVIDER from .env)")
+    p.add_argument("--model",    default=None,
+                   help="Model id (default: LLM_MODEL from .env, else provider default)")
     p.add_argument("--db_path",  type=Path, default=DB_PATH)
     p.add_argument("--show_chunks", action="store_true",
                    help="Print retrieved chunk previews")
@@ -307,20 +401,25 @@ def main():
     args = build_parser().parse_args()
 
     retriever = Retriever(db_path=args.db_path)
-    generator = Generator()
+    generator = Generator(provider=args.provider, model=args.model)
 
     if args.run_eval:
+        output = args.output or default_output_path(generator)
         run_eval_batch(
             ground_truth_path=args.ground_truth,
-            output_path=args.output,
+            output_path=output,
             retriever=retriever,
             generator=generator,
             k=args.k,
+            qids=args.qids,
+            limit=args.limit,
         )
-        print(f"\nNext step → python evaluate.py "
+        subset = (f" --qids {' '.join(args.qids)}" if args.qids else "") + \
+                 (f" --limit {args.limit}" if args.limit is not None else "")
+        print(f"\nNext step → python evaluation/evaluate.py "
               f"--ground_truth {args.ground_truth} "
-              f"--pipeline_output {args.output} "
-              f"--report evaluation/report.json")
+              f"--pipeline_output {output} "
+              f"--report evaluation/report.json{subset}")
         return
 
     # ── Single query mode ──────────────────────────────────────────────────────
@@ -358,7 +457,7 @@ def main():
     for s in result.cited_sources:
         print(f"  {s['etf_isin']} | {s['issuer']} | {s['doc_type']} | {s['year']}")
 
-    print(f"\n── TOKENS  in={result.input_tokens}  out={result.output_tokens} ──\n")
+    print(f"\n── COST  {SESSION.summary()} ──\n")
 
 
 if __name__ == "__main__":

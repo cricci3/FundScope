@@ -18,9 +18,9 @@ Tools available to the agent:
     - list_available_etfs: list all ETFs in the corpus (no args needed)
 
 Requirements:
-    pip install yfinance
-    Ollama running with a tool-capable model — recommended: mistral:7b or llama3.1:8b
-    (llama3.2:3b does NOT support tool-calling reliably)
+    A tool-capable LLM configured in .env (default: Claude Haiku 4.5 via the
+    Anthropic API — see .env.example). The loop only uses the neutral types
+    in src/llm/, so any provider registered there works.
 
 Usage:
     # Interactive agent mode
@@ -29,31 +29,28 @@ Usage:
     # Single question
     python src/agent.py --query "How has the iShares MSCI World performed this year?"
 
-    # Show the tool calls the agent made
-    python src/agent.py --show_calls
+    # Show the tool calls the agent made, and the cost of each question
+    python src/agent.py --show_calls --show_cost
 
-    # Use a different model
-    python src/agent.py --model mistral:7b
+    # Use a different provider / model
+    python src/agent.py --provider groq --model <model-id>
 """
 
 import json
 import argparse
 from pathlib import Path
-from typing import Any
-
-from openai import OpenAI
 
 # ── Local imports ──────────────────────────────────────────────────────────────
 from config import INDEX_PATH as DB_PATH
+from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, get_llm
 from retrieve import Retriever, route_query
 from live_data import get_etf_live_data, format_for_prompt, ISIN_TO_NAME
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
-DEFAULT_MODEL   = "mistral:7b"   # needs tool-calling support
 MAX_ITERATIONS  = 6              # safety cap on the agent loop
+MAX_TOKENS      = 1024
 K_RETRIEVE      = 6              # chunks per retrieval call
 
 KNOWN_ISINS = {
@@ -67,80 +64,71 @@ KNOWN_ISINS = {
 # The LLM decides when and how to call them.
 
 TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "search_etf_docs",
-            "description": (
-                "Search the ETF document corpus (factsheets and KIDs) for information "
-                "about costs, fees, risk indicators, replication method, holdings, "
-                "performance scenarios, or any other content from the PDF documents. "
-                "Use this for questions that can be answered from the fund documents."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "Natural language search query, e.g. 'ongoing charges iShares'",
-                    },
-                    "issuer": {
-                        "type": "string",
-                        "description": "Filter by fund issuer. One of: ishares, ubs. Omit to search all.",
-                        "enum": ["ishares", "ubs"],
-                    },
-                    "doc_type": {
-                        "type": "string",
-                        "description": "Filter by document type. One of: factsheet, kid. Omit to search both.",
-                        "enum": ["factsheet", "kid"],
-                    },
+    ToolSpec(
+        name="search_etf_docs",
+        description=(
+            "Search the ETF document corpus (factsheets and KIDs) for information "
+            "about costs, fees, risk indicators, replication method, holdings, "
+            "performance scenarios, or any other content from the PDF documents. "
+            "Use this for questions that can be answered from the fund documents."
+        ),
+        parameters_json_schema={
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Natural language search query, e.g. 'ongoing charges iShares'",
                 },
-                "required": ["query"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_live_data",
-            "description": (
-                "Fetch real-time market data for an ETF: current price, 1-month, "
-                "3-month, and year-to-date returns, AUM, and average daily volume. "
-                "Use this for questions about recent performance, price, or liquidity. "
-                "Do NOT use this for questions about fund documents (TER, SRI, etc.)."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "isin": {
-                        "type": "string",
-                        "description": (
-                            "ISIN of the ETF. "
-                            "iShares Core MSCI World = IE00B4L5Y983, "
-                            "UBS Core MSCI World = IE00BD4TXV59"
-                        ),
-                    },
+                "issuer": {
+                    "type": "string",
+                    "description": "Filter by fund issuer. One of: ishares, ubs. Omit to search all.",
+                    "enum": ["ishares", "ubs"],
                 },
-                "required": ["isin"],
+                "doc_type": {
+                    "type": "string",
+                    "description": "Filter by document type. One of: factsheet, kid. Omit to search both.",
+                    "enum": ["factsheet", "kid"],
+                },
             },
+            "required": ["query"],
         },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_available_etfs",
-            "description": (
-                "Return a list of all ETFs available in the corpus with their ISINs, "
-                "issuers, and names. Call this if the user asks what funds are available "
-                "or if you are unsure which ISIN to use."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": [],
+    ),
+    ToolSpec(
+        name="get_live_data",
+        description=(
+            "Fetch real-time market data for an ETF: current price, 1-month, "
+            "3-month, and year-to-date returns, AUM, and average daily volume. "
+            "Use this for questions about recent performance, price, or liquidity. "
+            "Do NOT use this for questions about fund documents (TER, SRI, etc.)."
+        ),
+        parameters_json_schema={
+            "type": "object",
+            "properties": {
+                "isin": {
+                    "type": "string",
+                    "description": (
+                        "ISIN of the ETF. "
+                        "iShares Core MSCI World = IE00B4L5Y983, "
+                        "UBS Core MSCI World = IE00BD4TXV59"
+                    ),
+                },
             },
+            "required": ["isin"],
         },
-    },
+    ),
+    ToolSpec(
+        name="list_available_etfs",
+        description=(
+            "Return a list of all ETFs available in the corpus with their ISINs, "
+            "issuers, and names. Call this if the user asks what funds are available "
+            "or if you are unsure which ISIN to use."
+        ),
+        parameters_json_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    ),
 ]
 
 
@@ -163,7 +151,7 @@ class ToolExecutor:
         elif name == "list_available_etfs":
             return self._list_available_etfs()
         else:
-            return f"[error] Unknown tool: {name}"
+            raise ValueError(f"Unknown tool: {name}")
 
     def _search_etf_docs(
         self,
@@ -261,94 +249,55 @@ class Agent:
     def __init__(
         self,
         retriever: Retriever,
-        model: str = DEFAULT_MODEL,
+        provider: str = None,
+        model: str = None,
         show_calls: bool = False,
+        llm: LLMClient = None,
     ):
-        self._client   = OpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
-        self._model    = model
+        self._llm      = llm or get_llm("generator", provider, model)
         self._executor = ToolExecutor(retriever)
         self._show_calls = show_calls
-        print(f"[agent] Model: {model}  |  Endpoint: {OLLAMA_BASE_URL}")
-        self._check_model()
-
-    def _check_model(self):
-        try:
-            available = [m.id for m in self._client.models.list().data]
-            if self._model not in available:
-                print(
-                    f"[warn] '{self._model}' not found in Ollama.\n"
-                    f"       Available: {available}\n"
-                    f"       Run: ollama pull {self._model}\n"
-                    f"       Note: llama3.2:3b does NOT support tool-calling reliably."
-                )
-        except Exception as e:
-            raise RuntimeError(
-                f"Cannot connect to Ollama. Make sure it is running.\n"
-                f"Error: {e}"
-            )
+        print(f"[agent] Provider: {self._llm.provider}  |  Model: {self._llm.model}")
 
     def run(self, question: str) -> str:
         """
         Run the agent loop for a single question.
         Returns the final answer string.
         """
-        # Start conversation with system prompt + user question
-        messages = [
-            {"role": "system",  "content": SYSTEM_PROMPT},
-            {"role": "user",    "content": question},
-        ]
+        messages = [Message("user", question)]
 
         for iteration in range(MAX_ITERATIONS):
-            response = self._client.chat.completions.create(
-                model=self._model,
-                messages=messages,
+            response = self._llm.chat(
+                messages,
+                system=SYSTEM_PROMPT,
                 tools=TOOLS,
-                tool_choice="auto",   # LLM decides: call a tool or answer directly
+                max_tokens=MAX_TOKENS,
             )
 
-            choice  = response.choices[0]
-            message = choice.message
+            # ── Case 1: LLM produced a final answer ───────────────────────────
+            if not response.tool_calls:
+                return response.text or f"[Agent stopped: empty answer ({response.stop_reason}).]"
 
-            # ── Case 1: LLM wants to call tools ───────────────────────────────
-            if choice.finish_reason == "tool_calls" and message.tool_calls:
-                # Append the assistant's tool-call message
-                messages.append({
-                    "role":       "assistant",
-                    "content":    message.content or "",
-                    "tool_calls": [
-                        {
-                            "id":       tc.id,
-                            "type":     "function",
-                            "function": {
-                                "name":      tc.function.name,
-                                "arguments": tc.function.arguments,
-                            },
-                        }
-                        for tc in message.tool_calls
-                    ],
-                })
+            # ── Case 2: LLM wants to call tools ───────────────────────────────
+            messages.append(response.to_message())
 
-                # Execute each tool call and append results
-                for tc in message.tool_calls:
+            for tc in response.tool_calls:
+                is_error = False
+                if tc.error:
+                    # Malformed arguments: tell the model so it can retry
+                    result, is_error = f"[tool error] {tc.error}", True
+                else:
                     try:
-                        args   = json.loads(tc.function.arguments)
                         result = self._executor.execute(
-                            tc.function.name, args, show_calls=self._show_calls
+                            tc.name, tc.arguments, show_calls=self._show_calls
                         )
                     except Exception as e:
-                        result = f"[tool error] {e}"
+                        result, is_error = f"[tool error] {type(e).__name__}: {e}", True
 
-                    messages.append({
-                        "role":         "tool",
-                        "tool_call_id": tc.id,
-                        "content":      result,
-                    })
+                messages.append(Message("tool", result, tool_call_id=tc.id,
+                                        is_error=is_error))
 
-                # Loop — LLM will now read the tool results and decide next step
-
-            # ── Case 2: LLM produced a final answer ───────────────────────────
-            else:
-                return message.content.strip()
+            # Loop — LLM will now read the tool results and decide next step
 
         # Safety fallback
         return "[Agent stopped: maximum iterations reached without a final answer.]"
@@ -365,6 +314,24 @@ def print_answer(question: str, answer: str) -> None:
     print(f"{'─' * width}\n")
 
 
+def print_cost(before: tuple) -> None:
+    """Print the tokens and estimated cost spent since the `before` snapshot."""
+    usage0, cost0 = before
+    u = SESSION.usage
+    print(f"  [cost] in={u.input_tokens - usage0.input_tokens} "
+          f"out={u.output_tokens - usage0.output_tokens} "
+          f"cache_read={u.cache_read_tokens - usage0.cache_read_tokens} "
+          f"| est. ${SESSION.cost_usd - cost0:.5f}\n")
+
+
+def ask_agent(agent: Agent, question: str, show_cost: bool = False) -> None:
+    before = SESSION.snapshot()
+    answer = agent.run(question)
+    print_answer(question, answer)
+    if show_cost:
+        print_cost(before)
+
+
 # ── Interactive loop ───────────────────────────────────────────────────────────
 
 HELP_TEXT = """
@@ -377,7 +344,7 @@ HELP_TEXT = """
 """
 
 
-def interactive_loop(agent: Agent) -> None:
+def interactive_loop(agent: Agent, show_cost: bool = False) -> None:
     print("\n" + "═" * 64)
     print("  FundScope Agent — ETF Research Assistant")
     print("  Powered by tool-calling. The LLM decides what to look up.")
@@ -412,8 +379,7 @@ def interactive_loop(agent: Agent) -> None:
             print(f"  Show tool calls: {'on' if agent._show_calls else 'off'}")
         else:
             try:
-                answer = agent.run(raw)
-                print_answer(raw, answer)
+                ask_agent(agent, raw, show_cost)
             except Exception as e:
                 print(f"\n  [error] {e}\n")
 
@@ -426,25 +392,30 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--query",       default=None,
                    help="Single question (omit for interactive mode)")
-    p.add_argument("--model",       default=DEFAULT_MODEL,
-                   help=f"Ollama model (default: {DEFAULT_MODEL}). "
-                        "Must support tool-calling. Recommended: mistral:7b or llama3.1:8b")
+    p.add_argument("--provider",    default=None, choices=PROVIDERS,
+                   help="LLM provider (default: LLM_PROVIDER from .env)")
+    p.add_argument("--model",       default=None,
+                   help="Model id; must support tool calling "
+                        "(default: LLM_MODEL from .env, else provider default)")
     p.add_argument("--db_path",     type=Path, default=DB_PATH)
     p.add_argument("--show_calls",  action="store_true",
                    help="Print each tool call as it happens")
+    p.add_argument("--show_cost",   action="store_true",
+                   help="Print tokens and estimated cost of each question")
     return p
 
 
 def main():
     args      = build_parser().parse_args()
     retriever = Retriever(db_path=args.db_path)
-    agent     = Agent(retriever=retriever, model=args.model, show_calls=args.show_calls)
+    agent     = Agent(retriever=retriever, provider=args.provider, model=args.model,
+                      show_calls=args.show_calls)
 
     if args.query:
-        answer = agent.run(args.query)
-        print_answer(args.query, answer)
+        ask_agent(agent, args.query, show_cost=args.show_cost)
     else:
-        interactive_loop(agent)
+        interactive_loop(agent, show_cost=args.show_cost)
+    print(f"  [session] {SESSION.summary()}")
 
 
 if __name__ == "__main__":

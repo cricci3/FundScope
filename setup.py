@@ -1,9 +1,13 @@
 """
 setup.py — One-command setup for FundScope
 Runs all steps required before ask.py can be used:
-  1. Checks prerequisites (Ollama, model, dependencies)
+  1. Checks prerequisites (dependencies, PDFs, LLM provider key + a tiny ping)
   2. Ingests PDFs from data/raw/ using metadata.json
   3. Embeds chunks and builds the ChromaDB index
+
+The LLM provider is configured in .env (cp .env.example .env). If the key is
+missing or the ping fails, the index is still built and FundScope works in
+retrieval-only mode.
 
 Usage:
     python setup.py
@@ -13,6 +17,9 @@ Usage:
 
     # Skip ingestion if data/processed/ already has files
     python setup.py --skip_ingest
+
+    # Skip the LLM check (no API call at all)
+    python setup.py --skip_llm_check
 """
 
 import sys
@@ -32,8 +39,6 @@ from config import (  # noqa: E402
     METADATA_PATH as METADATA,
     SRC_DIR as SRC,
 )
-
-DEFAULT_MODEL = "llama3.2:3b"
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -80,7 +85,9 @@ def check_python_deps() -> bool:
         ("pdfplumber",            "pdfplumber"),
         ("sentence-transformers", "sentence_transformers"),
         ("chromadb",              "chromadb"),
+        ("anthropic",             "anthropic"),
         ("openai",                "openai"),
+        ("python-dotenv",         "dotenv"),
     ]:
         try:
             __import__(import_name)
@@ -91,47 +98,30 @@ def check_python_deps() -> bool:
 
     if missing:
         print(f"\n  Install missing packages with:")
-        print(f"    pip install {' '.join(missing)}\n")
+        print(f"    uv sync\n")
         return False
     return True
 
 
-def check_ollama(model: str) -> bool:
-    header("Checking Ollama")
+def check_llm() -> bool:
+    header("Checking LLM provider")
+    from llm import LLMError, resolve
+    from llm.cli import ping
 
-    # Check if ollama binary exists
     try:
-        result = subprocess.run(
-            ["ollama", "list"],
-            capture_output=True, text=True
-        )
-    except FileNotFoundError:
-        result = None
-    if result is None or result.returncode != 0:
-        warn("Ollama is not installed or not running.")
-        print("""
-  Ollama is required to generate answers (free, local, no API key).
-
-  Install it from: https://ollama.com/download
-  Then pull the model:
-    ollama pull llama3.2:3b
-
-  If you only want to test retrieval without answers, you can
-  skip this and use:
-    python evaluation/run_retrieval.py
-""")
+        provider, model = resolve("generator")
+    except LLMError as e:
+        warn(str(e))
         return False
 
-    # Check if the requested model is available
-    available = result.stdout
-    if model not in available:
-        warn(f"Model '{model}' is not pulled yet.")
-        print(f"\n  Pull it with:\n    ollama pull {model}\n")
-        print(f"  Available models:\n{available}")
-        print(f"  Or pass a different model:\n    python setup.py --model <name>\n")
-        return False
+    print(f"  Provider: {provider}  |  Model: {model}  (from .env / defaults)")
+    if not (ROOT / ".env").exists():
+        warn("No .env file found — create one with:  cp .env.example .env")
 
-    success(f"Ollama is running and model '{model}' is available")
+    if not ping("generator"):
+        warn("LLM ping failed (see the message above).")
+        return False
+    success(f"{provider} / {model} answered")
     return True
 
 
@@ -202,10 +192,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Wipe and rebuild the vector index from scratch")
     p.add_argument("--skip_ingest",  action="store_true",
                    help="Skip PDF ingestion (use if data/processed/ is already populated)")
-    p.add_argument("--skip_ollama",  action="store_true",
-                   help="Skip Ollama check (useful if you only want retrieval without generation)")
-    p.add_argument("--model",        default=DEFAULT_MODEL,
-                   help=f"Ollama model to verify (default: {DEFAULT_MODEL})")
+    p.add_argument("--skip_llm_check", action="store_true",
+                   help="Skip the LLM provider check (no API call)")
     return p
 
 
@@ -223,11 +211,11 @@ def main():
     if not check_pdfs():
         abort("Fix missing PDF files and re-run setup.py")
 
-    ollama_ok = True
-    if not args.skip_ollama:
-        ollama_ok = check_ollama(args.model)
-        if not ollama_ok:
-            print("  Continuing setup without Ollama.")
+    llm_ok = True
+    if not args.skip_llm_check:
+        llm_ok = check_llm()
+        if not llm_ok:
+            print("  Continuing setup without an LLM.")
             print("  You can use retrieval-only mode after setup completes.\n")
 
     # ── Ingest ─────────────────────────────────────────────────────────────────
@@ -253,7 +241,7 @@ def main():
     print("  Setup complete!")
     print("═" * 56)
 
-    if ollama_ok:
+    if llm_ok:
         print("""
   You can now ask questions:
 
@@ -262,16 +250,16 @@ def main():
 """)
     else:
         print("""
-  Setup complete, but Ollama is not configured.
+  Setup complete, but no LLM provider is working (retrieval-only mode).
   The index is built — you can run retrieval-only evaluation:
 
-    python evaluation/run_retrieval.py
     python evaluation/evaluate.py --retrieval_only ...
 
-  To enable answer generation, install Ollama and run:
-    ollama pull llama3.2:3b
+  To enable answer generation:
+    cp .env.example .env        then set ANTHROPIC_API_KEY (or another provider)
+    python src/llm/cli.py --ping
   Then ask questions with:
-    python ask.py
+    python src/ask.py
 """)
 
 

@@ -1,16 +1,9 @@
 """
-generate.py — Prompt construction + Ollama API call
+generate.py — Prompt construction + LLM call
 ETF RAG Project — Phase 4
 
-Setup (one time):
-    1. Download and install Ollama: https://ollama.com
-    2. Pull the model:  ollama pull llama3.2:3b
-
-    From powershell, you can run the following commands to perform these 2 steps:
-    1. irm https://ollama.com/install.ps1 | iex
-    2. ollama pull llama3.2:3b
-
-    3. Ollama starts automatically as a background service.
+The model is reached through the provider-neutral interface in src/llm/
+(provider and model come from .env — see .env.example).
 
 Usage:
     # Test generate.py standalone (pipe in chunks from retrieve.py)
@@ -29,14 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-try:
-    from openai import OpenAI          # pip install openai>=1.0
-except ImportError:
-    raise ImportError(
-        "pip install openai\n"
-        "The openai package is used as the HTTP client for Ollama's "
-        "OpenAI-compatible API. No OpenAI account or key is needed."
-    )
+from llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
 
 try:
     from retrieve import RetrievedChunk
@@ -69,8 +55,6 @@ except ImportError:
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-OLLAMA_BASE_URL  = "http://localhost:11434/v1"
-DEFAULT_MODEL    = "llama3.2:3b"
 MAX_TOKENS       = 1024
 TEMPERATURE_FACT = 0.0   # Types 1, 2, 3 — deterministic
 TEMPERATURE_SYN  = 0.2   # Type 4 — slight variation for reasoning
@@ -97,9 +81,13 @@ class GenerationResult:
     answer: str
     cited_sources: list = field(default_factory=list)   # list[CitedSource]
     chunks_used: int = 0
-    model: str = DEFAULT_MODEL
+    provider: str = ""
+    model: str = ""
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+    cost_usd: Optional[float] = None
 
 
 # ── Context builder ────────────────────────────────────────────────────────────
@@ -129,7 +117,6 @@ def build_context(chunks: list) -> str:
 
 
 # ── System prompt ──────────────────────────────────────────────────────────────
-# Kept concise for small models — 3b models struggle with very long system prompts.
 
 SYSTEM_PROMPT = """\
 You are a financial document analyst for ETF factsheets and KIDs.
@@ -145,7 +132,6 @@ e.g. [IE00B4L5Y983 | ishares | factsheet | 2023].
 
 
 # ── Prompt templates ───────────────────────────────────────────────────────────
-# Small models do better with shorter, more direct prompts.
 
 def _prompt_type1(query: str, context: str) -> str:
     return (
@@ -217,43 +203,24 @@ def parse_citations(answer: str) -> list:
 # ── Generator ─────────────────────────────────────────────────────────────────
 
 class Generator:
-    """
-    Wraps the Ollama local API via the openai-compatible client.
-    No API key required. Ollama must be running (it starts automatically
-    on install, or run `ollama serve` manually).
-    """
+    """Builds the RAG prompt and calls the configured LLM (see src/llm/)."""
 
     def __init__(
         self,
-        model: str = DEFAULT_MODEL,
-        base_url: str = OLLAMA_BASE_URL,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+        llm: Optional[LLMClient] = None,
     ):
-        self._model  = model
-        self._client = OpenAI(
-            base_url=base_url,
-            api_key="ollama",          # required by the client but ignored by Ollama
-        )
-        print(f"[generate] Model: {model}  |  Endpoint: {base_url}")
-        self._check_connection()
+        self._llm = llm or get_llm("generator", provider, model)
+        print(f"[generate] Provider: {self._llm.provider}  |  Model: {self._llm.model}")
 
-    def _check_connection(self) -> None:
-        """Verify Ollama is reachable and the model is available."""
-        try:
-            models = self._client.models.list()
-            available = [m.id for m in models.data]
-            if self._model not in available:
-                print(
-                    f"[warn] Model '{self._model}' not found in Ollama.\n"
-                    f"       Available: {available}\n"
-                    f"       Run: ollama pull {self._model}"
-                )
-        except Exception as e:
-            raise RuntimeError(
-                f"Cannot connect to Ollama at {OLLAMA_BASE_URL}.\n"
-                f"Make sure Ollama is installed and running.\n"
-                f"Download: https://ollama.com\n"
-                f"Error: {e}"
-            )
+    @property
+    def provider(self) -> str:
+        return self._llm.provider
+
+    @property
+    def model(self) -> str:
+        return self._llm.model
 
     def answer(
         self,
@@ -262,7 +229,7 @@ class Generator:
         query_type: int = 1,
     ) -> GenerationResult:
         """
-        Build prompt → call Ollama → parse citations → return GenerationResult.
+        Build prompt → call the LLM → parse citations → return GenerationResult.
         """
         if query_type not in PROMPT_BUILDERS:
             raise ValueError(f"query_type must be 1–4, got {query_type}")
@@ -271,33 +238,30 @@ class Generator:
         user_prompt = PROMPT_BUILDERS[query_type](query, context)
         temperature = TEMPERATURE_SYN if query_type == 4 else TEMPERATURE_FACT
 
-        response = self._client.chat.completions.create(
-            model=self._model,
+        response = self._llm.chat(
+            [Message("user", user_prompt)],
+            system=SYSTEM_PROMPT,
             temperature=temperature,
             max_tokens=MAX_TOKENS,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user",   "content": user_prompt},
-            ],
         )
 
-        answer_text   = response.choices[0].message.content.strip()
-        cited_sources = parse_citations(answer_text)
-
-        # Ollama may not always return token counts
-        usage        = response.usage or type("U", (), {"prompt_tokens": 0, "completion_tokens": 0})()
-        input_tokens  = getattr(usage, "prompt_tokens",     0)
-        output_tokens = getattr(usage, "completion_tokens", 0)
+        answer_text = response.text
+        if response.stop_reason == "max_tokens":
+            print(f"[generate] [warn] answer truncated at max_tokens={MAX_TOKENS}")
 
         return GenerationResult(
             query=query,
             query_type=query_type,
             answer=answer_text,
-            cited_sources=cited_sources,
+            cited_sources=parse_citations(answer_text),
             chunks_used=len(chunks),
-            model=self._model,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
+            provider=response.provider,
+            model=response.model,
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cache_read_tokens=response.usage.cache_read_tokens,
+            cache_write_tokens=response.usage.cache_write_tokens,
+            cost_usd=response.cost_usd,
         )
 
 
@@ -305,14 +269,16 @@ class Generator:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="Generate an ETF answer using a local Ollama model"
+        description="Generate an ETF answer with the configured LLM"
     )
     p.add_argument("--query",        required=True)
     p.add_argument("--chunks_file",  type=Path,
                    help="JSON file of retrieved chunks (from retrieve.py --json)")
     p.add_argument("--query_type",   type=int, default=1, choices=[1, 2, 3, 4])
-    p.add_argument("--model",        default=DEFAULT_MODEL,
-                   help=f"Ollama model name (default: {DEFAULT_MODEL})")
+    p.add_argument("--provider",     default=None, choices=PROVIDERS,
+                   help="LLM provider (default: LLM_PROVIDER from .env)")
+    p.add_argument("--model",        default=None,
+                   help="Model id (default: LLM_MODEL from .env, else provider default)")
     p.add_argument("--show_context", action="store_true",
                    help="Print the full context sent to the model")
     return p
@@ -333,7 +299,7 @@ def main():
         print(build_context(chunks))
         print("──────────────────────────────────────────────────────\n")
 
-    gen    = Generator(model=args.model)
+    gen    = Generator(provider=args.provider, model=args.model)
     result = gen.answer(query=args.query, chunks=chunks, query_type=args.query_type)
 
     print(f"\n── ANSWER (type {result.query_type}) ───────────────────────────────")
@@ -341,7 +307,7 @@ def main():
     print(f"\n── SOURCES CITED ({len(result.cited_sources)}) ─────────────────────")
     for s in result.cited_sources:
         print(f"  {s.etf_isin} | {s.issuer} | {s.doc_type} | {s.year}")
-    print(f"\n── TOKENS  in={result.input_tokens}  out={result.output_tokens} ──\n")
+    print(f"\n── COST  {SESSION.summary()} ──\n")
 
 
 if __name__ == "__main__":

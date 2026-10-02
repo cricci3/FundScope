@@ -1,0 +1,318 @@
+{
+  "run": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5",
+    "started_at": "2026-10-02T13:16:48+00:00",
+    "finished_at": "2026-10-02T13:16:52+00:00",
+    "status": "complete",
+    "n_questions": 3,
+    "totals": {
+      "input_tokens": 2541,
+      "output_tokens": 191,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0.003496,
+      "unpriced_questions": 0
+    },
+    "budget_usd": 0.5
+  },
+  "results": [
+    {
+      "qid": "T1_001",
+      "question": "Total Expense Ratio of the iShares Core MSCI World UCITS ETF (IE00B4L5Y983)?",
+      "query_type": 1,
+      "retrieved_chunks": [
+        {
+          "chunk_id": "c38f96819d3dc8ea",
+          "text": "iShares Core MSCI World UCITS ETF\nU.S. Dollar (Accumulating)\niShares III plc\nCALENDAR YEAR PERFORMANCE\n2016 2017 2018 2019 2020 2021 2022 2023 2024 2025\nShare Class 7.73 22.45 -8.65 27.76 15.95 21.90 -18.03 23.86 18.70 21.16",
+          "score": 0.698,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "performance",
+          "block_type": "text",
+          "page_number": 2,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "4036193ce7759950",
+          "text": "ETF: IE00B4L5Y983\nIssuer: ishares\nCategory: MSCI World\nDocument type: factsheet\nCurrency: USD\nShare class: acc\nYear: 2026, Q4\nISIN: IE00B4L5Y983\nInception Date: 25-Sep-2009\nBenchmark: composed of companies from ISIN : IE00B4L5Y983\nDomicile: Ireland\nCurrency: USD\nTER / OCF: 0.20%\nNumber of Holdings: 1,309",
+          "score": 0.6667,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "key facts summary",
+          "block_type": "key_facts",
+          "page_number": -1,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "1176d16cfdea3775",
+          "text": "PASSIVE\niShares Core MSCI World UCITS ETF\nEUNL\nU.S. Dollar (Accumulating)\niShares III plc\nFebruary 2026\nPerformance, Portfolio Breakdowns, Net Assets, and Distribution Yield information as at: 28-Feb-2026. All other data as at\n04-Mar-2026.",
+          "score": 0.6561,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "portfolio characteristics",
+          "block_type": "text",
+          "page_number": 1,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "2e54a9166ea8669e",
+          "text": "iShares Core MSCI World UCITS ETF\nU.S. Dollar (Accumulating)\niShares III plc\nTOP 10 HOLDINGS (%) GEOGRAPHIC BREAKDOWN (%)\nNVIDIA CORP 5.04%\nAPPLE INC 4.55%\nMICROSOFT CORP 3.25%\nAMAZON COM INC 2.37%\nALPHABET INC CLASS A 2.13%",
+          "score": 0.6514,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "wkn a0rpwh - -",
+          "block_type": "text",
+          "page_number": 3,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "32e8f9daf082c9aa",
+          "text": "es Total Expense Ratio : 0.20%\n2. Covering 85% of the listed equities in each country Use of Income : Accumulating\n3. Use at the core of a portfolio to seek long-term growth Net Assets of Share Class (M) : 132,181.88 USD\nKEY FACTS\nRISK INDICATOR",
+          "score": 0.6441,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "portfolio characteristics",
+          "block_type": "text",
+          "page_number": 1,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        }
+      ],
+      "generated_answer": "The Total Expense Ratio (TER) of the iShares Core MSCI World UCITS ETF is **0.20%** [IE00B4L5Y983 | ishares | factsheet | 2026].",
+      "cited_sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026
+        }
+      ],
+      "chunks_used": 5,
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "input_tokens": 900,
+      "output_tokens": 56,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0.00118
+    },
+    {
+      "qid": "T1_002",
+      "question": "What index does the UBS Core MSCI World UCITS ETF (IE00BD4TXV59) track?",
+      "query_type": 1,
+      "retrieved_chunks": [
+        {
+          "chunk_id": "b8383071857a26d0",
+          "text": "UBS Core MSCI World UCITS ETF USD acc\nwith an investment in the actual underlying instrument. This Share class: An investment fund can issue several types of",
+          "score": 0.6417,
+          "etf_isin": "IE00BD4TXV59",
+          "etf_ticker": "",
+          "issuer": "ubs",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "total expense ratio",
+          "block_type": "text",
+          "page_number": 5,
+          "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "1de8bbd95dad5033",
+          "text": "ETF: IE00BD4TXV59\nIssuer: ubs\nCategory: MSCI World\nDocument type: factsheet\nCurrency: USD\nShare class: acc\nYear: 2026, Q4\nISIN: IE00BD4TXV59\nInception Date: 07.06.2019\nBenchmark: description\nDomicile: Ireland\nCurrency: and",
+          "score": 0.6359,
+          "etf_isin": "IE00BD4TXV59",
+          "etf_ticker": "",
+          "issuer": "ubs",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "key facts summary",
+          "block_type": "key_facts",
+          "page_number": -1,
+          "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "e944999b7a8c8ae7",
+          "text": "F to UBS Core MSCI\nVolatility1\nWorld UCITS ETF and TER (flat fee) was reduced from 0.10% to 0.06%. The shown TER refers to the\n\u2013 Fund 9.05% 10.67% 14.39% current as opposed to the realized fee.\n\u2013 Benchmark 9.05% 10.67% 14.37% Index description",
+          "score": 0.6275,
+          "etf_isin": "IE00BD4TXV59",
+          "etf_ticker": "",
+          "issuer": "ubs",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "fund performance",
+          "block_type": "text",
+          "page_number": 1,
+          "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "046dde77f7ff26fc",
+          "text": "uant to that regulation can be\nfound on www.ubs.com/funds. The benchmark is the intellectual property of the respective index provider. The fund or the share class is neither sponsored nor endorsed by the",
+          "score": 0.6167,
+          "etf_isin": "IE00BD4TXV59",
+          "etf_ticker": "",
+          "issuer": "ubs",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "fund performance",
+          "block_type": "text",
+          "page_number": 3,
+          "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "5ffbc1f3daabdad5",
+          "text": "UBS Core MSCI World UCITS ETF USD acc\nIndex Market exposure (%) Index Sector exposure (%)\nIndex Index\nUnited States 70.1 Information Technology 25.1\nJapan 6.1 Financials 16.4\nUnited Kingdom 3.9 Industrials 12.3\nCanada 3.6 Health Care 9.9",
+          "score": 0.6165,
+          "etf_isin": "IE00BD4TXV59",
+          "etf_ticker": "",
+          "issuer": "ubs",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "fund performance",
+          "block_type": "text",
+          "page_number": 2,
+          "source_file": "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        }
+      ],
+      "generated_answer": "The provided documents do not contain sufficient information. While the factsheet indicates the fund is categorized as \"MSCI World\" and references a benchmark, the specific index name that the UBS Core MSCI World UCITS ETF tracks is not explicitly stated in the available context [IE00BD4TXV59 | ubs | factsheet | 2026].",
+      "cited_sources": [
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "doc_type": "factsheet",
+          "year": 2026
+        }
+      ],
+      "chunks_used": 5,
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "input_tokens": 743,
+      "output_tokens": 82,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0.001153
+    },
+    {
+      "qid": "T1_003",
+      "question": "What is the ISIN of the iShares Core MSCI World UCITS ETF?",
+      "query_type": 1,
+      "retrieved_chunks": [
+        {
+          "chunk_id": "1176d16cfdea3775",
+          "text": "PASSIVE\niShares Core MSCI World UCITS ETF\nEUNL\nU.S. Dollar (Accumulating)\niShares III plc\nFebruary 2026\nPerformance, Portfolio Breakdowns, Net Assets, and Distribution Yield information as at: 28-Feb-2026. All other data as at\n04-Mar-2026.",
+          "score": 0.7912,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "portfolio characteristics",
+          "block_type": "text",
+          "page_number": 1,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "c38f96819d3dc8ea",
+          "text": "iShares Core MSCI World UCITS ETF\nU.S. Dollar (Accumulating)\niShares III plc\nCALENDAR YEAR PERFORMANCE\n2016 2017 2018 2019 2020 2021 2022 2023 2024 2025\nShare Class 7.73 22.45 -8.65 27.76 15.95 21.90 -18.03 23.86 18.70 21.16",
+          "score": 0.7804,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "performance",
+          "block_type": "text",
+          "page_number": 2,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "024c92ed0dbfdbea",
+          "text": "compare it with other products.\nProduct\niShares Core MSCI World UCITS ETF (the \u201cFund\u201d), USD Accu (the \"Share Class\"), ISIN: IE00B4L5Y983, is authorised in Ireland and\nmanufactured by BlackRock Asset Management Ireland Limited (the \u201cManager\u201d) which is part of the BlackRock, Inc group.",
+          "score": 0.7408,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "kid",
+          "year": 2026,
+          "quarter": "",
+          "section_heading": "how long should i hold it",
+          "block_type": "text",
+          "page_number": 1,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf"
+        },
+        {
+          "chunk_id": "4036193ce7759950",
+          "text": "ETF: IE00B4L5Y983\nIssuer: ishares\nCategory: MSCI World\nDocument type: factsheet\nCurrency: USD\nShare class: acc\nYear: 2026, Q4\nISIN: IE00B4L5Y983\nInception Date: 25-Sep-2009\nBenchmark: composed of companies from ISIN : IE00B4L5Y983\nDomicile: Ireland\nCurrency: USD\nTER / OCF: 0.20%\nNumber of Holdings: 1,309",
+          "score": 0.7239,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "key facts summary",
+          "block_type": "key_facts",
+          "page_number": -1,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        },
+        {
+          "chunk_id": "2e54a9166ea8669e",
+          "text": "iShares Core MSCI World UCITS ETF\nU.S. Dollar (Accumulating)\niShares III plc\nTOP 10 HOLDINGS (%) GEOGRAPHIC BREAKDOWN (%)\nNVIDIA CORP 5.04%\nAPPLE INC 4.55%\nMICROSOFT CORP 3.25%\nAMAZON COM INC 2.37%\nALPHABET INC CLASS A 2.13%",
+          "score": 0.7134,
+          "etf_isin": "IE00B4L5Y983",
+          "etf_ticker": "",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026,
+          "quarter": "Q4",
+          "section_heading": "wkn a0rpwh - -",
+          "block_type": "text",
+          "page_number": 3,
+          "source_file": "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf"
+        }
+      ],
+      "generated_answer": "The ISIN of the iShares Core MSCI World UCITS ETF is IE00B4L5Y983. [IE00B4L5Y983 | ishares | factsheet | 2026]",
+      "cited_sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "doc_type": "factsheet",
+          "year": 2026
+        }
+      ],
+      "chunks_used": 5,
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "input_tokens": 898,
+      "output_tokens": 53,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0.001163
+    }
+  ]
+}

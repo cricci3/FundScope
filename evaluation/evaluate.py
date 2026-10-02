@@ -21,7 +21,13 @@ Usage:
                        --pipeline_output evaluation/pipeline_output.json \
                        --retrieval_only
 
-Pipeline output format — one entry per question:
+    # Only a subset (must match the subset the pipeline ran on)
+    python evaluation/evaluate.py ... --limit 3
+    python evaluation/evaluate.py ... --qids T1_001 T2_003
+
+Pipeline output format — {"run": {...metadata...}, "results": [...]} as written
+by pipeline.py --run_eval (a bare list of results is accepted too), one result
+per question:
     [
       {
         "qid": "T1_001",
@@ -385,17 +391,40 @@ def aggregate(results: list[QuestionEval]) -> dict:
 
 # ── Main eval loop ─────────────────────────────────────────────────────────────
 
+def select_questions(questions: list, qids: Optional[list] = None,
+                     limit: Optional[int] = None) -> list:
+    """Same selection as pipeline.py --qids / --limit."""
+    if qids:
+        unknown = set(qids) - {q["qid"] for q in questions}
+        if unknown:
+            raise SystemExit(f"Unknown qids: {sorted(unknown)}")
+        questions = [q for q in questions if q["qid"] in set(qids)]
+    if limit is not None:
+        questions = questions[:limit]
+    return questions
+
+
+def load_pipeline_output(path: Path) -> tuple[list, dict]:
+    """Return (results, run metadata). Older outputs are a bare list without metadata."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(data, list):
+        return data, {}
+    return data["results"], data.get("run", {})
+
+
 def run_evaluation(
     ground_truth_path: Path,
     pipeline_output_path: Path,
     retrieval_only: bool = False,
+    qids: Optional[list] = None,
+    limit: Optional[int] = None,
 ) -> tuple[list[QuestionEval], dict]:
 
-    gt_data = json.loads(ground_truth_path.read_text())
-    po_data = json.loads(pipeline_output_path.read_text())
+    gt_data = json.loads(ground_truth_path.read_text(encoding="utf-8"))
+    po_data, _ = load_pipeline_output(pipeline_output_path)
 
     # Only evaluate questions in the active "questions" list — not _parked_type3
-    questions    = {q["qid"]: q for q in gt_data["questions"]}
+    questions    = {q["qid"]: q for q in select_questions(gt_data["questions"], qids, limit)}
     pipeline_out = {e["qid"]: e for e in po_data}
 
     results: list[QuestionEval] = []
@@ -484,7 +513,25 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Where to write the full per-question report")
     p.add_argument("--retrieval_only",  action="store_true",
                    help="Skip faithfulness and attribution — useful before generation is wired up")
+    p.add_argument("--qids",            nargs="+", default=None,
+                   help="Only evaluate these question ids")
+    p.add_argument("--limit",           type=int, default=None,
+                   help="Only evaluate the first N (selected) questions")
     return p
+
+
+def print_run_cost(run: dict) -> None:
+    """Tokens and cost of the pipeline run being scored (the scorer itself makes no LLM calls yet)."""
+    if not run:
+        print("  Pipeline run: no metadata (old output format)\n")
+        return
+    t = run.get("totals", {})
+    cost = t.get("cost_usd")
+    cost = f"${cost:.4f}" if cost is not None else "unknown"
+    print(f"  Pipeline run: {run.get('provider')}/{run.get('model')}  "
+          f"[{run.get('status')}, {run.get('n_questions')} q, {run.get('started_at')}]")
+    print(f"  Tokens in={t.get('input_tokens')} out={t.get('output_tokens')} "
+          f"cache_read={t.get('cache_read_tokens')}  |  est. cost {cost}\n")
 
 
 def main():
@@ -493,10 +540,15 @@ def main():
         args.ground_truth,
         args.pipeline_output,
         retrieval_only=args.retrieval_only,
+        qids=args.qids,
+        limit=args.limit,
     )
     print_summary(summary)
+    _, run = load_pipeline_output(args.pipeline_output)
+    print_run_cost(run)
 
     report = {
+        "pipeline_run": run,
         "summary": summary,
         "per_question": [
             {

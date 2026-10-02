@@ -15,6 +15,9 @@ Usage:
 
     # Show the retrieved chunks alongside the answer
     python src/ask.py --show_chunks
+
+    # Show tokens and estimated cost of each answer
+    python src/ask.py --show_cost
 """
 
 import re
@@ -25,6 +28,7 @@ from pathlib import Path
 from config import INDEX_PATH as DB_PATH
 from retrieve import Retriever, route_query
 from generate import Generator, build_context
+from llm import PROVIDERS, SESSION
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -155,6 +159,7 @@ def ask(
     generator: Generator,
     show_chunks: bool = False,
     k: int = K_DEFAULT,
+    show_cost: bool = False,
 ) -> None:
     """Process a single question end-to-end and print the answer."""
 
@@ -193,6 +198,12 @@ def ask(
         chunks=chunks,
     )
 
+    if show_cost:
+        cost = f"${result.cost_usd:.5f}" if result.cost_usd is not None else "unknown"
+        print(f"  [cost] {result.provider}/{result.model}  in={result.input_tokens} "
+              f"out={result.output_tokens} cache_read={result.cache_read_tokens}  "
+              f"| est. {cost}\n")
+
 
 # ── Interactive loop ───────────────────────────────────────────────────────────
 
@@ -211,7 +222,8 @@ FUNDS_TEXT = "\n".join(
 )
 
 
-def interactive_loop(retriever: Retriever, generator: Generator, show_chunks: bool) -> None:
+def interactive_loop(retriever: Retriever, generator: Generator, show_chunks: bool,
+                     show_cost: bool = False) -> None:
     print("\n" + "═" * 64)
     print("  FundScope — ETF Research Assistant")
     print("  Type a question, 'funds' to list ETFs, or 'exit' to quit.")
@@ -241,7 +253,7 @@ def interactive_loop(retriever: Retriever, generator: Generator, show_chunks: bo
             print(f"  Show chunks: {'on' if show_chunks else 'off'}")
         else:
             try:
-                ask(raw, retriever, generator, show_chunks=show_chunks)
+                ask(raw, retriever, generator, show_chunks=show_chunks, show_cost=show_cost)
             except Exception as e:
                 print(f"\n  [error] {e}\n")
 
@@ -257,23 +269,29 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--show_chunks", action="store_true",
                    help="Print retrieved chunks alongside the answer")
     p.add_argument("--db_path",     type=Path, default=DB_PATH)
-    p.add_argument("--model",       default="llama3.2:3b",
-                   help="Ollama model name (run 'ollama list' to see available)")
+    p.add_argument("--provider",    default=None, choices=PROVIDERS,
+                   help="LLM provider (default: LLM_PROVIDER from .env)")
+    p.add_argument("--model",       default=None,
+                   help="Model id (default: LLM_MODEL from .env, else provider default)")
     p.add_argument("--k",           type=int, default=K_DEFAULT,
                    help="Number of chunks to retrieve (default 6)")
+    p.add_argument("--show_cost",   action="store_true",
+                   help="Print tokens and estimated cost of each question")
     return p
 
 
 def main():
     args      = build_parser().parse_args()
     retriever = Retriever(db_path=args.db_path)
-    generator = Generator(model=args.model)
+    generator = Generator(provider=args.provider, model=args.model)
 
     if args.query:
         ask(args.query, retriever, generator,
-            show_chunks=args.show_chunks, k=args.k)
+            show_chunks=args.show_chunks, k=args.k, show_cost=args.show_cost)
     else:
-        interactive_loop(retriever, generator, show_chunks=args.show_chunks)
+        interactive_loop(retriever, generator, show_chunks=args.show_chunks,
+                         show_cost=args.show_cost)
+    print(f"  [session] {SESSION.summary()}")
 
 
 if __name__ == "__main__":
