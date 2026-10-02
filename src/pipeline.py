@@ -145,6 +145,27 @@ def chunk_to_dict(chunk: RetrievedChunk) -> dict:
 
 # ── Core pipeline function ─────────────────────────────────────────────────────
 
+def retrieve_chunks(
+    question: str,
+    retriever: Retriever,
+    query_type: int = 1,
+    isin_list: Optional[list[str]] = None,
+    metadata_filter_hint: Optional[dict] = None,
+    k: int = K_DEFAULT,
+) -> list[RetrievedChunk]:
+    """Retrieval step only (no LLM): pick the mode from query_type, then search."""
+    hint = metadata_filter_hint or {}
+    mode = infer_retrieval_mode(query_type, isin_list, hint)
+    return route_query(
+        retriever=retriever,
+        query=question,
+        metadata_filter_hint=hint,
+        isin_list=isin_list,
+        mode=mode,
+        k=k,
+    )
+
+
 def run_query(
     question: str,
     retriever: Retriever,
@@ -162,18 +183,9 @@ def run_query(
       3. Generate answer with citations
       4. Return structured PipelineResult
     """
-    hint = metadata_filter_hint or {}
-    mode = infer_retrieval_mode(query_type, isin_list, hint)
-
     # ── Retrieval ──────────────────────────────────────────────────────────────
-    chunks: list[RetrievedChunk] = route_query(
-        retriever=retriever,
-        query=question,
-        metadata_filter_hint=hint,
-        isin_list=isin_list,
-        mode=mode,
-        k=k,
-    )
+    chunks = retrieve_chunks(question, retriever, query_type, isin_list,
+                             metadata_filter_hint, k)
 
     # ── Generation ────────────────────────────────────────────────────────────
     result: GenerationResult = generator.answer(
