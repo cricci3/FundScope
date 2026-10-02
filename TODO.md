@@ -17,8 +17,24 @@ del task, es. `2.3: backend OpenAI-compatibile`), push su `origin/main` a fine f
 - `evaluation/baseline_llama3.2-3b.json` — solo **storico**: misurato su indice sporco (chunk triplicati) e con scorer
   difettoso, quindi **non confrontabile** con le run future.
 - Retrieval-only dopo la fase 1: precision 0.988 · recall 1.000 (questa è la baseline valida del retrieval).
-- La **baseline di riferimento della generazione** viene fissata a fine fase 3 (task 3.7), con modello cloud e scorer corretto.
-  Le metriche di generazione misurate durante la fase 2 servono solo come smoke test: non trarne conclusioni.
+- **Baseline ufficiale della generazione (02/10/2026, task 3.7): `evaluation/baseline_cloud.json`** — tutte le fasi
+  successive si confrontano con questa (`evaluate.py ... --judge llm --compare evaluation/baseline_cloud.json`).
+  Generatore Claude Haiku 4.5, judge Claude Sonnet 5.5 (effort medium), 17 domande, run
+  `evaluation/runs/20261002T134517Z_claude-haiku-4-5.json`. Costo: pipeline 0,028 $ + judge 0,093 $ = 0,121 $.
+
+  | Metrica | Overall | Type 1 (7) | Type 2 (8) | Type 4 (2) |
+  |---|---|---|---|---|
+  | Judge verdict pass | **35.3%** | 71.4% | 12.5% | 0.0% |
+  | Judge correctness (correct=1, partial=½) | 46.7% | | | |
+  | Judge grounded | 82.4% | | | |
+  | Judge abstained ("i documenti non contengono…") | 35.3% | | | |
+  | Retrieval precision / recall (a livello di documento) | 0.988 / 1.000 | | | |
+  | Attribution | 88.2% | 100% | 87.5% | 50.0% |
+  | Euristica: expected values trovati (T1–2) | 42.9% | | | |
+
+  Lettura: il retrieval trova sempre il *documento* giusto (P/R ≈ 1 sono misurate per documento), ma spesso non il
+  *chunk* con il dato → il modello si astiene (35%). Il collo di bottiglia è il retrieval a livello di chunk, non la generazione.
+- Le metriche di generazione della fase 2 (smoke test) non sono confrontabili con la baseline (scorer diverso).
 
 Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spuntare `[x]` a lavoro finito.
 
@@ -144,32 +160,37 @@ Scelte di progetto:
 
 Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare sull'output della fase 2.9 senza nuove chiamate API; il judge (3.4) usa l'interfaccia `get_llm(role="judge")`.
 
-- [ ] **3.1 Rubric Type 4 corretta** (`evaluation/evaluate.py::_score_rubric`)
+- [x] **3.1 Rubric Type 4 corretta** (`evaluation/evaluate.py::_score_rubric`)
   - Oggi un item passa se compare *una qualsiasi parola* della frase (anche "for", "both") → T4 sempre 100%.
   - Keyword esplicite per item nel `ground_truth.json` (es. `{"item": "...", "keywords": ["0.20%", "0.06%"], "min_match": 2}`) come scorer euristico di riserva.
   - `must_not_contain` oggi cerca letteralmente la frase ("hallucinated figures") → sempre vero: delegarlo al judge (3.4).
 
-- [ ] **3.2 Controllo "unsupported claims" meno rumoroso** (`_check_unsupported_claims`)
+- [x] **3.2 Controllo "unsupported claims" meno rumoroso** (`_check_unsupported_claims`)
   - Rimuovere dalla risposta le citazioni `[ISIN | … | year]` prima di estrarre i numeri; ignorare anni (19xx/20xx) e frammenti di ISIN; normalizzare i formati (`0,20 %` vs `0.20%`).
 
-- [ ] **3.3 Match della risposta attesa meno rigido** (`_answer_contains_expected`)
+- [x] **3.3 Match della risposta attesa meno rigido** (`_answer_contains_expected`)
   - Type 1: verificare i *valori chiave* (nuovo campo `expected_values: [...]` in `ground_truth.json`) invece dell'intera stringa.
   - Type 2: lista di valori attesi per ogni ETF.
 
-- [ ] **3.4 LLM-as-judge** — completare `evaluate_faithfulness_llm` usando `get_llm(role="judge")`; flag `--judge llm|heuristic`.
+- [x] **3.4 LLM-as-judge** — completare `evaluate_faithfulness_llm` usando `get_llm(role="judge")`; flag `--judge llm|heuristic`.
   - Judge configurabile separatamente (`JUDGE_PROVIDER`, `JUDGE_MODEL`, 2.4): **un modello diverso da quello che genera** — default Claude Sonnet 5.5 che giudica le risposte di Haiku 4.5. Temperature 0, output JSON validato (con il backend Anthropic usare gli output strutturati per avere lo schema garantito).
   - Il costo del judge rientra nel conteggio e nel budget della run (2.5).
   - Done quando: il judge restituisce per ogni domanda verdetto + motivazione salvati nel report.
+  - *Esito (02/10/2026): `evaluation/judge.py`, output JSON con schema garantito (`output_config.format`) e ri-validato.
+    Sonnet 5.5 non accetta `temperature` (400): si usa il default del modello, con `effort` (`JUDGE_EFFORT`, default medium).
+    Prompt caching attivo sul system prompt del judge (~0,005 $/domanda).*
 
-- [ ] **3.5 Creare `evaluation/run_retrieval.py`** (citato nel README ma inesistente): solo retrieval sulla ground truth, output compatibile con `evaluate.py --retrieval_only`. Nessun LLM richiesto.
+- [x] **3.5 Creare `evaluation/run_retrieval.py`** (citato nel README ma inesistente): solo retrieval sulla ground truth, output compatibile con `evaluate.py --retrieval_only`. Nessun LLM richiesto.
 
-- [ ] **3.6 Report comparabili** — salvare nel report `provider`, `model`, `judge_model`, `chunk_size`, `embedding_model`, timestamp; salvare ogni run in `evaluation/runs/<timestamp>_<model>.json`; flag `--compare <report.json>` che stampa i delta.
+- [x] **3.6 Report comparabili** — salvare nel report `provider`, `model`, `judge_model`, `chunk_size`, `embedding_model`, timestamp; salvare ogni run in `evaluation/runs/<timestamp>_<model>.json`; flag `--compare <report.json>` che stampa i delta.
 
-- [ ] **3.7 Baseline ufficiale**
+- [x] **3.7 Baseline ufficiale**
   - Rieseguire pipeline + valutazione (judge attivo) con il provider principale (Claude Haiku 4.5). Opzionale, se il credito lo consente o con una chiave gratuita: un secondo modello/provider per confronto.
   - Facoltativo per risparmiare: usare la Batch API di Anthropic (−50 %) per le run di valutazione, che non richiedono risposte immediate.
   - Salvare come `evaluation/baseline_cloud.json` e riportare le metriche in testa a questo file e in `CLAUDE.md`.
   - Done quando: esiste una baseline di generazione affidabile; tutte le fasi successive si confrontano con questa.
+  - *Esito (02/10/2026): baseline in testa a questo file. Indice ricostruito prima della run (299 chunk, invariato).
+    Batch API non usata: costo totale già 0,12 $. Nessun secondo provider (nessuna chiave gratuita configurata).*
 
 ---
 

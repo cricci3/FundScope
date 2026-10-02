@@ -1,0 +1,1150 @@
+{
+  "meta": {
+    "created_at": "2026-10-02T13:47:03+00:00",
+    "ground_truth": "evaluation\\ground_truth.json",
+    "pipeline_output": "evaluation\\runs\\20261002T134517Z_claude-haiku-4-5.json",
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5",
+    "judge": "llm",
+    "judge_provider": "anthropic",
+    "judge_model": "claude-sonnet-5-5",
+    "judge_effort": "medium",
+    "judge_status": "complete",
+    "judge_cost_usd": 0.092964,
+    "embedding_model": "all-MiniLM-L6-v2",
+    "chunk_sizes": {
+      "factsheet": 250,
+      "kid": 400
+    },
+    "chunk_overlaps": {
+      "factsheet": 30,
+      "kid": 40
+    },
+    "subset": {
+      "qids": null,
+      "limit": null
+    },
+    "retrieval_only": false
+  },
+  "pipeline_run": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5",
+    "started_at": "2026-10-02T13:45:17+00:00",
+    "finished_at": "2026-10-02T13:45:53+00:00",
+    "status": "complete",
+    "n_questions": 17,
+    "totals": {
+      "input_tokens": 14623,
+      "output_tokens": 2746,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0.028353,
+      "unpriced_questions": 0
+    },
+    "budget_usd": 0.5
+  },
+  "summary": {
+    "overall": {
+      "n": 17,
+      "retrieval_precision_mean": 0.988,
+      "retrieval_recall_mean": 1.0,
+      "any_relevant_pct": 1.0,
+      "attribution_score_mean": 0.882,
+      "expected_values_pass_pct": 0.429,
+      "rubric_must_mention_mean": 0.125,
+      "unsupported_numbers_pct": 0.0,
+      "abstained_pct": 0.647,
+      "judge_n": 17,
+      "judge_pass_pct": 0.353,
+      "judge_score_mean": 0.412,
+      "judge_correct_mean": 0.467,
+      "judge_grounded_pct": 0.824,
+      "judge_abstained_pct": 0.353
+    },
+    "by_query_type": {
+      "type_1": {
+        "n": 7,
+        "retrieval_precision_mean": 0.971,
+        "retrieval_recall_mean": 1.0,
+        "any_relevant_pct": 1.0,
+        "attribution_score_mean": 1.0,
+        "expected_values_pass_pct": 0.714,
+        "rubric_must_mention_mean": null,
+        "unsupported_numbers_pct": 0.0,
+        "abstained_pct": 0.286,
+        "judge_n": 7,
+        "judge_pass_pct": 0.714,
+        "judge_score_mean": 0.714,
+        "judge_correct_mean": 0.714,
+        "judge_grounded_pct": 1.0,
+        "judge_abstained_pct": 0.286
+      },
+      "type_2": {
+        "n": 8,
+        "retrieval_precision_mean": 1.0,
+        "retrieval_recall_mean": 1.0,
+        "any_relevant_pct": 1.0,
+        "attribution_score_mean": 0.875,
+        "expected_values_pass_pct": 0.143,
+        "rubric_must_mention_mean": null,
+        "unsupported_numbers_pct": 0.0,
+        "abstained_pct": 0.875,
+        "judge_n": 8,
+        "judge_pass_pct": 0.125,
+        "judge_score_mean": 0.25,
+        "judge_correct_mean": 0.25,
+        "judge_grounded_pct": 0.75,
+        "judge_abstained_pct": 0.5
+      },
+      "type_4": {
+        "n": 2,
+        "retrieval_precision_mean": 1.0,
+        "retrieval_recall_mean": 1.0,
+        "any_relevant_pct": 1.0,
+        "attribution_score_mean": 0.5,
+        "expected_values_pass_pct": null,
+        "rubric_must_mention_mean": 0.125,
+        "unsupported_numbers_pct": 0.0,
+        "abstained_pct": 1.0,
+        "judge_n": 2,
+        "judge_pass_pct": 0.0,
+        "judge_score_mean": 0.0,
+        "judge_correct_mean": null,
+        "judge_grounded_pct": 0.5,
+        "judge_abstained_pct": 0.0
+      }
+    },
+    "by_difficulty": {
+      "easy": {
+        "n": 4,
+        "retrieval_precision_mean": 0.95,
+        "retrieval_recall_mean": 1.0,
+        "any_relevant_pct": 1.0,
+        "attribution_score_mean": 1.0,
+        "expected_values_pass_pct": 0.75,
+        "rubric_must_mention_mean": null,
+        "unsupported_numbers_pct": 0.0,
+        "abstained_pct": 0.25,
+        "judge_n": 4,
+        "judge_pass_pct": 0.75,
+        "judge_score_mean": 0.75,
+        "judge_correct_mean": 0.75,
+        "judge_grounded_pct": 1.0,
+        "judge_abstained_pct": 0.25
+      },
+      "medium": {
+        "n": 7,
+        "retrieval_precision_mean": 1.0,
+        "retrieval_recall_mean": 1.0,
+        "any_relevant_pct": 1.0,
+        "attribution_score_mean": 0.929,
+        "expected_values_pass_pct": 0.286,
+        "rubric_must_mention_mean": null,
+        "unsupported_numbers_pct": 0.0,
+        "abstained_pct": 0.714,
+        "judge_n": 7,
+        "judge_pass_pct": 0.286,
+        "judge_score_mean": 0.286,
+        "judge_correct_mean": 0.286,
+        "judge_grounded_pct": 1.0,
+        "judge_abstained_pct": 0.571
+      },
+      "hard": {
+        "n": 6,
+        "retrieval_precision_mean": 1.0,
+        "retrieval_recall_mean": 1.0,
+        "any_relevant_pct": 1.0,
+        "attribution_score_mean": 0.75,
+        "expected_values_pass_pct": 0.333,
+        "rubric_must_mention_mean": 0.125,
+        "unsupported_numbers_pct": 0.0,
+        "abstained_pct": 0.833,
+        "judge_n": 6,
+        "judge_pass_pct": 0.167,
+        "judge_score_mean": 0.333,
+        "judge_correct_mean": 0.5,
+        "judge_grounded_pct": 0.5,
+        "judge_abstained_pct": 0.167
+      }
+    }
+  },
+  "compared_with": null,
+  "per_question": [
+    {
+      "qid": "T1_001",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "retrieval": {
+        "qid": "T1_001",
+        "query_type": 1,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_001",
+        "query_type": 1,
+        "answer_contains_expected": true,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "0.20%": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": false
+      },
+      "attribution": {
+        "qid": "T1_001",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "correct",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "pass",
+        "reasoning": "The answer states a TER of 0.20%, which matches the reference. Chunks 2 and 5 both support this value (TER / OCF: 0.20%; Total Expense Ratio: 0.20%), so the answer is grounded.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0075025,
+        "input_tokens": 1095,
+        "output_tokens": 146
+      }
+    },
+    {
+      "qid": "T1_002",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "retrieval": {
+        "qid": "T1_002",
+        "query_type": 1,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_002",
+        "query_type": 1,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "[\"Total Return Net\", \"Net Total Return\", \"MSCI World Index (Net)\", \"MSCI World (Net)\", \"MSCI World Net\"]": false
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T1_002",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "abstained",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The answer abstains, saying the index name is not explicitly stated, and does not give the reference value 'MSCI World Total Return Net'. Its claims (category 'MSCI World', a benchmark is referenced) are supported by the context. Abstention counts as a fail.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0037381999999999997,
+        "input_tokens": 920,
+        "output_tokens": 159
+      }
+    },
+    {
+      "qid": "T1_003",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "retrieval": {
+        "qid": "T1_003",
+        "query_type": 1,
+        "precision_at_k": 0.8,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_003",
+        "query_type": 1,
+        "answer_contains_expected": true,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "IE00B4L5Y983": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": false
+      },
+      "attribution": {
+        "qid": "T1_003",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "correct",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "pass",
+        "reasoning": "The answer gives ISIN IE00B4L5Y983, which matches the reference exactly. The context (the KID chunk and the key facts summary chunk) explicitly states this ISIN for the iShares Core MSCI World UCITS ETF, so the claim is supported.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0040882,
+        "input_tokens": 1095,
+        "output_tokens": 159
+      }
+    },
+    {
+      "qid": "T1_004",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T1_004",
+        "query_type": 1,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_004",
+        "query_type": 1,
+        "answer_contains_expected": true,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "4": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": false
+      },
+      "attribution": {
+        "qid": "T1_004",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "correct",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "pass",
+        "reasoning": "The answer states the SRI is 4 out of 7, matching the reference value of 4. Chunk 3 supports this, including the medium risk class. The additional explanation about potential losses from market movements or inability to pay is also supported by chunks 1 and 3.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0037922,
+        "input_tokens": 977,
+        "output_tokens": 153
+      }
+    },
+    {
+      "qid": "T1_005",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T1_005",
+        "query_type": 1,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_005",
+        "query_type": 1,
+        "answer_contains_expected": true,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "[\"5 years\", \"five years\", \"5-year\", \"5 year\"]": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": false
+      },
+      "attribution": {
+        "qid": "T1_005",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "correct",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "pass",
+        "reasoning": "The answer states a recommended holding period of 5 years, which matches the reference. Multiple retrieved chunks for IE00B4L5Y983 confirm this value, so the claim is grounded.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0034582,
+        "input_tokens": 910,
+        "output_tokens": 133
+      }
+    },
+    {
+      "qid": "T1_006",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T1_006",
+        "query_type": 1,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_006",
+        "query_type": 1,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "[\"physical\"]": false
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T1_006",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "abstained",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The reference answer is 'Physical', but the assistant said the documents do not specify the replication method, so it abstained. The statement that the ETF is 'PASSIVE' is supported by Chunk 1, and the claim that the context lacks replication information is consistent with the retrieved chunks. Abstaining fails the correctness requirement.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0041421999999999995,
+        "input_tokens": 1022,
+        "output_tokens": 179
+      }
+    },
+    {
+      "qid": "T1_007",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "hard",
+      "retrieval": {
+        "qid": "T1_007",
+        "query_type": 1,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T1_007",
+        "query_type": 1,
+        "answer_contains_expected": true,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "answer": {
+            "0.20%": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": false
+      },
+      "attribution": {
+        "qid": "T1_007",
+        "query_type": 1,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "correct",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "pass",
+        "reasoning": "The answer states management fees and other administrative or operating costs of 0.20% per year, which matches the reference of 0.2%. It also gives transaction costs of 0.00% and the 20 USD figure, and both appear in the retrieved context. All claims are supported.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0035502,
+        "input_tokens": 851,
+        "output_tokens": 154
+      }
+    },
+    {
+      "qid": "T2_001",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "easy",
+      "retrieval": {
+        "qid": "T2_001",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_001",
+        "query_type": 2,
+        "answer_contains_expected": true,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "IE00B4L5Y983": {
+            "0.20%": true
+          },
+          "IE00BD4TXV59": {
+            "0.06%": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": false
+      },
+      "attribution": {
+        "qid": "T2_001",
+        "query_type": 2,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "correct",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "pass",
+        "reasoning": "The answer identifies IE00BD4TXV59 (UBS) as having the lower ongoing charge, at 0.06% versus 0.20% for IE00B4L5Y983, which matches the reference. Both figures appear in the retrieved context: Chunk 1 gives 0.20% and Chunk 2 gives the TER reduction to 0.06%.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0050722,
+        "input_tokens": 1442,
+        "output_tokens": 188
+      }
+    },
+    {
+      "qid": "T2_002",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T2_002",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_002",
+        "query_type": 2,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "IE00B4L5Y983": {
+            "[\"optimis\", \"optimiz\"]": false
+          },
+          "IE00BD4TXV59": {
+            "[\"full replic\", \"fully replic\"]": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_002",
+        "query_type": 2,
+        "correct_sources_cited": false,
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
+      },
+      "judge": {
+        "correctness": "abstained",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The reference states IE00B4L5Y983 uses Physical (Optimised) and IE00BD4TXV59 uses Physical (Full replicated). The answer says the documents lack enough information to compare the two, so it abstains and gives neither method. Its claims about the glossary text on full and synthetic replication are supported by the retrieved chunks, so it is grounded.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0049702,
+        "input_tokens": 1376,
+        "output_tokens": 191
+      }
+    },
+    {
+      "qid": "T2_003",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T2_003",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_003",
+        "query_type": 2,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "IE00B4L5Y983": {
+            "[\"4 out of 7\", \"4/7\", \"rated 4\", \"sri of 4\", \"sri is 4\", \"sri: 4\", \"indicator of 4\", \"class 4\", \"level 4\", \"risk class of 4\", \"score of 4\"]": true
+          },
+          "IE00BD4TXV59": {
+            "[\"4 out of 7\", \"4/7\", \"rated 4\", \"sri of 4\", \"sri is 4\", \"sri: 4\", \"indicator of 4\", \"class 4\", \"level 4\", \"risk class of 4\", \"score of 4\"]": false
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_003",
+        "query_type": 2,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "incorrect",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The reference says both KIDs are rated 4 out of 7. The answer correctly gives 4/7 for IE00B4L5Y983, but says the UBS rating is not disclosed and that no comparison can be made. It therefore misses the conclusion that they are the same. Every claim in the answer is supported by the retrieved context, since the UBS chunks show only the 1-7 scale and no number. Because the answer reaches no conclusion on the comparison, it is closer to an abstention than a correct answer.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0054421999999999995,
+        "input_tokens": 1392,
+        "output_tokens": 235
+      }
+    },
+    {
+      "qid": "T2_004",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "hard",
+      "retrieval": {
+        "qid": "T2_004",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_004",
+        "query_type": 2,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "IE00B4L5Y983": {
+            "0.20%": false
+          },
+          "IE00BD4TXV59": {
+            "0.10%": true
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_004",
+        "query_type": 2,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "partially_correct",
+        "grounded": false,
+        "unsupported_claims": [
+          "Both products charge no entry or exit fees (the UBS entry cost is not shown in the context, and the answer itself says it is not explicitly stated)"
+        ],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "partial",
+        "reasoning": "The answer correctly reports no entry or exit fees for IE00B4L5Y983. For IE00BD4TXV59 it correctly gives 0.1% management fees, USD 0 transaction costs, no performance fee and USD 0 exit costs. It omits the 0.20% ongoing cost and 0.00% transaction costs for IE00B4L5Y983, and it does not give the UBS entry cost. The summary claim that both products have no entry fee is not supported for UBS, since the context does not show the UBS entry cost.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.006572199999999999,
+        "input_tokens": 1662,
+        "output_tokens": 294
+      }
+    },
+    {
+      "qid": "T2_006",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T2_006",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_006",
+        "query_type": 2,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "factsheet": {
+            "0.20%": false
+          },
+          "kid": {
+            "0.20%": false
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_006",
+        "query_type": 2,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "abstained",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The reference says both documents report 0.20%. The answer abstains, saying the documents lack the ongoing charge figures, and gives no value. Its claims match the context: the KID chunk shows a Transaction Cost of 0.00%, and neither retrieved chunk contains an ongoing charge, so it is grounded. Abstaining still fails the question, which has an expected answer.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0044242,
+        "input_tokens": 1093,
+        "output_tokens": 193
+      }
+    },
+    {
+      "qid": "T2_007",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "retrieval": {
+        "qid": "T2_007",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_007",
+        "query_type": 2,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "factsheet": {
+            "[\"physical\"]": false
+          },
+          "kid": {
+            "[\"optimis\", \"optimiz\"]": false
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_007",
+        "query_type": 2,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "abstained",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The answer says the retrieved context lacks replication details and gives no value, so it abstains instead of stating the factsheet's Physical (Optimised) structure and the KID's optimising techniques. The retrieved chunks contain no replication information, so the abstention is consistent with the context and grounded. An abstention still counts as a fail.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0037081999999999996,
+        "input_tokens": 815,
+        "output_tokens": 177
+      }
+    },
+    {
+      "qid": "T2_008",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "hard",
+      "retrieval": {
+        "qid": "T2_008",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_008",
+        "query_type": 2,
+        "answer_contains_expected": null,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": null,
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_008",
+        "query_type": 2,
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
+      },
+      "judge": {
+        "correctness": "abstained",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "fail",
+        "reasoning": "The answer abstains, saying the context lacks the scenario figures and performance data. It never gives the reference's conclusion that KID scenarios are forward-looking, model-based projections and the factsheet shows realised historical returns, so the two are not directly comparable. Its claims about the context are supported by the retrieved chunks, so it is grounded, but abstention counts as a fail.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0045302,
+        "input_tokens": 1151,
+        "output_tokens": 192
+      }
+    },
+    {
+      "qid": "T2_009",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "hard",
+      "retrieval": {
+        "qid": "T2_009",
+        "query_type": 2,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T2_009",
+        "query_type": 2,
+        "answer_contains_expected": false,
+        "rubric_scores": null,
+        "has_unsupported_claims": false,
+        "expected_details": {
+          "IE00B4L5Y983": {
+            "[\"retail\"]": true,
+            "[\"loss\", \"losses\"]": true
+          },
+          "IE00BD4TXV59": {
+            "[\"retail\"]": false,
+            "[\"loss\", \"losses\"]": false
+          }
+        },
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T2_009",
+        "query_type": 2,
+        "correct_sources_cited": false,
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
+      },
+      "judge": {
+        "correctness": "partially_correct",
+        "grounded": false,
+        "unsupported_claims": [
+          "specifying retail investors capable of bearing full capital loss (context says ability to bear losses up to the amount invested; 'full capital loss' is a paraphrase/overstatement)",
+          "Only the iShares KID provides explicit target investor criteria (the UBS KID's content on this is merely not retrieved, not shown to be absent)"
+        ],
+        "must_mention": [],
+        "should_mention": [],
+        "must_not_contain": [],
+        "verdict": "partial",
+        "reasoning": "The answer correctly states the iShares target investor (retail investors able to bear losses up to the amount invested). It abstains on UBS, although the reference says both are for retail investors with the ability to bear losses, so the comparison is incomplete. The claim that only iShares provides explicit criteria is not supported by the context, which simply lacks the UBS target market chunk, and 'full capital loss' is a loose paraphrase.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0063522,
+        "input_tokens": 1452,
+        "output_tokens": 314
+      }
+    },
+    {
+      "qid": "T4_001",
+      "query_type": 4,
+      "query_type_label": "synthetic",
+      "difficulty": "hard",
+      "retrieval": {
+        "qid": "T4_001",
+        "query_type": 4,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T4_001",
+        "query_type": 4,
+        "answer_contains_expected": null,
+        "rubric_scores": {
+          "must_mention": {
+            "ongoing charge / OCF for both ETFs with correct figures": false,
+            "replication method for both ETFs": false,
+            "recommended holding period from KID": true,
+            "correct source attribution (isin + doc_type + year) for each claim": false
+          },
+          "should_mention": {
+            "AUM or fund size as proxy for liquidity/stability": false,
+            "tracking difference if available": false,
+            "any cost differences beyond OCF (transaction costs from KID)": true
+          },
+          "must_not_contain": {
+            "figures not present in the source documents": null,
+            "a recommendation unsupported by cited evidence": null
+          },
+          "summary": {
+            "must_mention_score": 0.25,
+            "should_mention_score": 0.33,
+            "must_not_violated": null,
+            "overall_pass": false
+          }
+        },
+        "has_unsupported_claims": false,
+        "expected_details": null,
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T4_001",
+        "query_type": 4,
+        "correct_sources_cited": false,
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
+      },
+      "judge": {
+        "correctness": "not_applicable",
+        "grounded": true,
+        "unsupported_claims": [],
+        "must_mention": [
+          {
+            "item": "ongoing charge / OCF for both ETFs with correct figures",
+            "met": false,
+            "note": "Gives 0.20% for iShares correctly, but states UBS OCF is unavailable (context indeed lacks it); the item is not met for both."
+          },
+          {
+            "item": "replication method for both ETFs",
+            "met": false,
+            "note": "Answer says replication info is not in the context; not covered for either."
+          },
+          {
+            "item": "recommended holding period from KID",
+            "met": false,
+            "note": "Gives 5 years for iShares only; UBS missing, so not covered for both."
+          },
+          {
+            "item": "correct source attribution (isin + doc_type + year) for each claim",
+            "met": true,
+            "note": "Citations use ISIN, issuer, doc_type, year correctly for the claims made."
+          }
+        ],
+        "should_mention": [
+          {
+            "item": "AUM or fund size as proxy for liquidity/stability",
+            "met": false,
+            "note": "Not mentioned."
+          },
+          {
+            "item": "tracking difference if available",
+            "met": false,
+            "note": "Not mentioned."
+          },
+          {
+            "item": "any cost differences beyond OCF (transaction costs from KID)",
+            "met": true,
+            "note": "Mentions iShares transaction cost of 0.00% from KID."
+          }
+        ],
+        "must_not_contain": [
+          {
+            "item": "figures not present in the source documents",
+            "violated": false,
+            "note": "All figures appear in the context."
+          },
+          {
+            "item": "a recommendation unsupported by cited evidence",
+            "violated": true,
+            "note": "Recommends iShares despite having no UBS cost data, so the comparison is one-sided; the claim that the 5-year holding period aligns with long-term horizons is not supported as a differentiator."
+          }
+        ],
+        "verdict": "fail",
+        "reasoning": "The answer is grounded and cites sources correctly, but most must_mention items are unmet: UBS OCF, replication methods, and UBS holding period are missing (the retrieved context lacked them). It also recommends iShares without a real cost comparison, which violates the unsupported recommendation constraint.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.010734200000000001,
+        "input_tokens": 1893,
+        "output_tokens": 664
+      }
+    },
+    {
+      "qid": "T4_002",
+      "query_type": 4,
+      "query_type_label": "synthetic",
+      "difficulty": "hard",
+      "retrieval": {
+        "qid": "T4_002",
+        "query_type": 4,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
+        "any_relevant_retrieved": true
+      },
+      "faithfulness": {
+        "qid": "T4_002",
+        "query_type": 4,
+        "answer_contains_expected": null,
+        "rubric_scores": {
+          "must_mention": {
+            "OCF / ongoing charge comparison with figures": false,
+            "replication method for both": false,
+            "SRI score from KID for both": false,
+            "source attribution for every factual claim": false
+          },
+          "should_mention": {
+            "domicile of each fund": false,
+            "distribution policy (acc/dist)": false,
+            "AUM difference": false
+          },
+          "must_not_contain": {
+            "hallucinated figures": null,
+            "claims attributed to wrong ETF": null
+          },
+          "summary": {
+            "must_mention_score": 0.0,
+            "should_mention_score": 0.0,
+            "must_not_violated": null,
+            "overall_pass": false
+          }
+        },
+        "has_unsupported_claims": false,
+        "expected_details": null,
+        "unsupported_numbers": [],
+        "abstained": true
+      },
+      "attribution": {
+        "qid": "T4_002",
+        "query_type": 4,
+        "correct_sources_cited": false,
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
+      },
+      "judge": {
+        "correctness": "not_applicable",
+        "grounded": false,
+        "unsupported_claims": [
+          "iShares Core MSCI World UCITS ETF is described as \"PASSIVE\" - this is supported, but it is presented as a replication method, which it is not (passive is a management style, not a replication method)",
+          "The UBS document mentions replication - chunk 5 and 6 only contain generic glossary text about replicated index, not a statement about this fund's replication",
+          "Citation year tag '2026 Q4' does not match the context tags (2026)"
+        ],
+        "must_mention": [
+          {
+            "item": "OCF / ongoing charge comparison with figures",
+            "met": false,
+            "note": "Answer states figures are not in the chunks; no OCF figures given for either fund."
+          },
+          {
+            "item": "replication method for both",
+            "met": false,
+            "note": "Only 'PASSIVE' for iShares, which is not a replication method; UBS method not stated."
+          },
+          {
+            "item": "SRI score from KID for both",
+            "met": false,
+            "note": "Answer says no risk information is available; no SRI given."
+          },
+          {
+            "item": "source attribution for every factual claim",
+            "met": true,
+            "note": "Claims carry citations, though the year/quarter tags are slightly altered ('2026 Q4')."
+          }
+        ],
+        "should_mention": [
+          {
+            "item": "domicile of each fund",
+            "met": false,
+            "note": "Not mentioned, although the context shows both are Irish."
+          },
+          {
+            "item": "distribution policy (acc/dist)",
+            "met": false,
+            "note": "Not mentioned, although both are accumulating share classes."
+          },
+          {
+            "item": "AUM difference",
+            "met": false,
+            "note": "Not mentioned; not in the context."
+          }
+        ],
+        "must_not_contain": [
+          {
+            "item": "hallucinated figures",
+            "violated": false,
+            "note": "The performance figures 18.70 and 21.16 are in the context."
+          },
+          {
+            "item": "claims attributed to wrong ETF",
+            "violated": false,
+            "note": "Claims are attributed to the correct ETFs."
+          }
+        ],
+        "verdict": "fail",
+        "reasoning": "Most must_mention items are unmet: no OCF figures, no proper replication method for both, and no SRI. The answer is honest about the gaps, but it contains minor ungrounded claims, such as treating 'PASSIVE' as a replication method and saying the UBS document mentions replication of this fund. It does not hallucinate figures or misattribute them.",
+        "model": "claude-sonnet-5-5",
+        "cost_usd": 0.0108862,
+        "input_tokens": 1589,
+        "output_tokens": 740
+      }
+    }
+  ]
+}
