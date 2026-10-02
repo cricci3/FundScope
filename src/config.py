@@ -22,6 +22,10 @@ EVAL_DIR       = PROJECT_ROOT / "evaluation"
 COLLECTION_NAME = "etf_chunks"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"   # 384d, ~80 MB, CPU-native
 
+# Chunk size / overlap in characters, per doc type (used by ingest.py)
+CHUNK_SIZES    = {"factsheet": 250, "kid": 400}
+CHUNK_OVERLAPS = {"factsheet": 30, "kid": 40}
+
 # ── LLM provider ───────────────────────────────────────────────────────────────
 # Values come from .env (see .env.example); real environment variables win over
 # .env, and CLI flags (--provider / --model) win over both.
@@ -41,6 +45,7 @@ LLM_PROVIDER   = os.getenv("LLM_PROVIDER") or "anthropic"
 LLM_MODEL      = os.getenv("LLM_MODEL") or None
 JUDGE_PROVIDER = os.getenv("JUDGE_PROVIDER") or "anthropic"
 JUDGE_MODEL    = os.getenv("JUDGE_MODEL") or None
+JUDGE_EFFORT   = os.getenv("JUDGE_EFFORT") or "medium"   # reasoning effort hint for the judge
 
 LLM_MIN_INTERVAL_S = float(os.getenv("LLM_MIN_INTERVAL_S") or 0)     # throttle for free tiers
 LLM_MAX_COST_USD   = float(os.getenv("LLM_MAX_COST_USD") or 0.50)    # per-run budget

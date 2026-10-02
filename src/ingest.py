@@ -36,7 +36,7 @@ try:
 except ImportError:
     raise ImportError("pdfplumber is required: pip install pdfplumber")
 
-from config import DATA_PROCESSED
+from config import DATA_PROCESSED, CHUNK_SIZES, CHUNK_OVERLAPS
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -328,8 +328,7 @@ def clean_text(raw: str, doc_type: str) -> str:
 #        splitting mid-section loses the regulatory context.
 # Factsheets: smaller chunks (250 chars) — documents are denser.
 
-CHUNK_SIZES = {"factsheet": 250, "kid": 400}
-CHUNK_OVERLAPS = {"factsheet": 30, "kid": 40}
+# Values live in config.py (CHUNK_SIZES, CHUNK_OVERLAPS) so evaluation reports can record them.
 
 
 def split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[tuple[str, int]]:

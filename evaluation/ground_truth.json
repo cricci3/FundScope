@@ -3,7 +3,9 @@
   "_notes": [
     "Each entry has a unique qid, a query_type (1–4), and a list of source_chunks",
     "that must be retrieved for the answer to be considered grounded.",
-    "expected_answer is the canonical string for Type 1–3 (exact or near-exact match).",
+    "expected_answer is the canonical answer for Type 1–3, used as reference by the LLM judge.",
+    "expected_values (Type 1–2) are the key values the heuristic scorer looks for: a list for Type 1, a dict label → list for Type 2 (labels that are ISINs are checked in the part of the answer about that ETF). Each value is a string or a list of alternatives; numbers/percentages are compared numerically. null = judge only.",
+    "Type 4 rubric items are {item, keywords, min_match} for the heuristic scorer (each keyword is a string or a list of alternatives); must_not_contain is checked only by the LLM judge.",
     "For Type 4 (synthetic), expected_answer is null and answer_rubric defines",
     "the list of concepts a good answer must cover.",
     "difficulty: easy | medium | hard — used to slice eval results.",
@@ -20,6 +22,7 @@
       "difficulty": "easy",
       "question": "Total Expense Ratio of the iShares Core MSCI World UCITS ETF (IE00B4L5Y983)?",
       "expected_answer": "0.20%",
+      "expected_values": ["0.20%"],
       "answer_rubric": null,
       "sources": [
         {
@@ -41,6 +44,7 @@
       "difficulty": "easy",
       "question": "What index does the UBS Core MSCI World UCITS ETF (IE00BD4TXV59) track?",
       "expected_answer": "MSCI World Total Return Net",
+      "expected_values": [["Total Return Net", "Net Total Return", "MSCI World Index (Net)", "MSCI World (Net)", "MSCI World Net"]],
       "answer_rubric": null,
       "sources": [
         {
@@ -62,6 +66,7 @@
       "difficulty": "easy",
       "question": "What is the ISIN of the iShares Core MSCI World UCITS ETF?",
       "expected_answer": "IE00B4L5Y983",
+      "expected_values": ["IE00B4L5Y983"],
       "answer_rubric": null,
       "sources": [
         {
@@ -83,6 +88,7 @@
       "difficulty": "medium",
       "question": "What is the Summary Risk Indicator (SRI) of the IE00B4L5Y983 KID?",
       "expected_answer": "4",
+      "expected_values": ["4"],
       "answer_rubric": null,
       "sources": [
         {
@@ -104,6 +110,7 @@
       "difficulty": "medium",
       "question": "What is the recommended holding period stated in the IE00B4L5Y983 KID?",
       "expected_answer": "5 years",
+      "expected_values": [["5 years", "five years", "5-year", "5 year"]],
       "answer_rubric": null,
       "sources": [
         {
@@ -125,6 +132,7 @@
       "difficulty": "medium",
       "question": "What replication method does the iShares Core MSCI World ETF use?",
       "expected_answer": "Physical",
+      "expected_values": [["physical"]],
       "answer_rubric": null,
       "sources": [
         {
@@ -146,6 +154,7 @@
       "difficulty": "hard",
       "question": "What are the ongoing costs for IE00B4L5Y983 as stated in the KID?",
       "expected_answer": "0.2%",
+      "expected_values": ["0.20%"],
       "answer_rubric": null,
       "sources": [
         {
@@ -168,6 +177,7 @@
       "difficulty": "easy",
       "question": "Which ETF has a lower ongoing charge: IE00B4L5Y983 (iShares Core MSCI World) or IE00BD4TXV59 (UBS Core MSCI World)?",
       "expected_answer": "IE00BD4TXV59 at 0.06% vs IE00B4L5Y983 at 0.20%",
+      "expected_values": {"IE00B4L5Y983": ["0.20%"], "IE00BD4TXV59": ["0.06%"]},
       "answer_rubric": null,
       "sources": [
         {
@@ -196,6 +206,7 @@
       "difficulty": "medium",
       "question": "Compare the replication methods of IE00B4L5Y983 and IE00BD4TXV59.",
       "expected_answer": "IE00B4L5Y983 uses Physical (Optimised); IE00BD4TXV59 uses Physical (Full replicated)",
+      "expected_values": {"IE00B4L5Y983": [["optimis", "optimiz"]], "IE00BD4TXV59": [["full replic", "fully replic"]]},
       "answer_rubric": null,
       "sources": [
         {
@@ -223,6 +234,7 @@
       "difficulty": "medium",
       "question": "Do the KIDs for IE00B4L5Y983 and IE00BD4TXV59 assign the same Summary Risk Indicator?",
       "expected_answer": "Yes, both are rated 4 out of 7",
+      "expected_values": {"IE00B4L5Y983": [["4 out of 7", "4/7", "rated 4", "sri of 4", "sri is 4", "sri: 4", "indicator of 4", "class 4", "level 4", "risk class of 4", "score of 4"]], "IE00BD4TXV59": [["4 out of 7", "4/7", "rated 4", "sri of 4", "sri is 4", "sri: 4", "indicator of 4", "class 4", "level 4", "risk class of 4", "score of 4"]]},
       "answer_rubric": null,
       "sources": [
         {
@@ -250,6 +262,7 @@
       "difficulty": "hard",
       "question": "Compare the total cost breakdown (entry, ongoing, exit) for IE00B4L5Y983 and IE00BD4TXV59 as reported in their KIDs.",
       "expected_answer": "For IE00B4L5Y983 the Composition of Costs is the following, entry costs and exit costs are 0%, no fees are charged at entry and exit. Ongoing costs taken each year are: 1) 0.20% of the value of the investment per year as management fees and other administrative or operating costs, 2) 0.00% of the value of the investment per year as transaction fees. For IE00BD4TXV59 the Composition of Costs is the following, entry costs and exit costs are 0%, no fees are charged at entry and exit. Ongoing costs taken each year are: 1) 0.10% of the value of the investment per year as management fees and other administrative or operating costs, 2) 0.00% of the value of the investment per year as performance fees.",
+      "expected_values": {"IE00B4L5Y983": ["0.20%"], "IE00BD4TXV59": ["0.10%"]},
       "answer_rubric": null,
       "sources": [
         {
@@ -278,6 +291,7 @@
       "difficulty": "medium",
       "question": "The iShares Core MSCI World ETF (IE00B4L5Y983) factsheet reports an ongoing charge. Does the KID for the same fund report a consistent ongoing cost figure?",
       "expected_answer": "Yes, both report 0.20% — factsheet as Total Expense Ratio, KID as Annual cost impact or ongoing costs taken each year in What are the costs section.",
+      "expected_values": {"factsheet": ["0.20%"], "kid": ["0.20%"]},
       "answer_rubric": null,
       "sources": [
         {
@@ -305,7 +319,8 @@
       "query_type_label": "comparative",
       "difficulty": "medium",
       "question": "What replication method does IE00B4L5Y983 use according to its factsheet, and does the KID description of the product mention the same approach?",
-      "expected_answer": "Factsheet states Physical (with Optimised methodology) product structure; KID instead does not describe the fund structure in replication terms.",
+      "expected_answer": "Factsheet states Physical product structure (Optimised methodology); the KID does not use the word replication but says the Fund uses optimising techniques to achieve a similar return to the Index, which is consistent with the factsheet.",
+      "expected_values": {"factsheet": [["physical"]], "kid": [["optimis", "optimiz"]]},
       "answer_rubric": null,
       "sources": [
         {
@@ -334,6 +349,7 @@
       "difficulty": "hard",
       "question": "The UBS Core MSCI World ETF (IE00BD4TXV59) KID describes performance scenarios. Does the factsheet's performance section tell a consistent story about expected returns?",
       "expected_answer": "The KID performance scenarios are forward-looking, model-based projections under the PRIIPs framework, while the factsheet shows realised historical returns. These are not directly comparable. Although the historical returns fall within the broad range of outcomes shown in the KID, this does not imply consistency, as the central scenario represents a modelled median outcome rather than an annualised expectation derived from past performance.",
+      "expected_values": null,
       "answer_rubric": null,
       "sources": [
         {
@@ -362,6 +378,7 @@
       "difficulty": "hard",
       "question": "Compare how IE00B4L5Y983 (iShares) and IE00BD4TXV59 (UBS) each describe their target investor in their respective KIDs.",
       "expected_answer": "Based on KIDs, both Funds are intended for retail investors with the ability to bear losses.",
+      "expected_values": {"IE00B4L5Y983": [["retail"], ["loss", "losses"]], "IE00BD4TXV59": [["retail"], ["loss", "losses"]]},
       "answer_rubric": null,
       "sources": [
         {
@@ -392,15 +409,15 @@
       "expected_answer": null,
       "answer_rubric": {
         "must_mention": [
-          "ongoing charge / OCF for both ETFs with correct figures",
-          "replication method for both ETFs",
-          "recommended holding period from KID",
-          "correct source attribution (isin + doc_type + year) for each claim"
+          {"item": "ongoing charge / OCF for both ETFs with correct figures", "keywords": [["0.20%", "0.2%"], ["0.06%", "0.10%", "0.1%"]], "min_match": 2},
+          {"item": "replication method for both ETFs", "keywords": [["optimis", "optimiz"], ["full replic", "fully replic"]], "min_match": 2},
+          {"item": "recommended holding period from KID", "keywords": [["5 years", "five years", "5-year", "5 year"]], "min_match": 1},
+          {"item": "correct source attribution (isin + doc_type + year) for each claim", "keywords": [["[IE00B4L5Y983 |"], ["[IE00BD4TXV59 |"]], "min_match": 2}
         ],
         "should_mention": [
-          "AUM or fund size as proxy for liquidity/stability",
-          "tracking difference if available",
-          "any cost differences beyond OCF (transaction costs from KID)"
+          {"item": "AUM or fund size as proxy for liquidity/stability", "keywords": [["aum", "fund size", "assets under management", "net assets", "share class assets"]], "min_match": 1},
+          {"item": "tracking difference if available", "keywords": [["tracking difference", "tracking error"]], "min_match": 1},
+          {"item": "any cost differences beyond OCF (transaction costs from KID)", "keywords": [["transaction cost", "entry cost", "exit cost", "entry fee", "exit fee"]], "min_match": 1}
         ],
         "must_not_contain": [
           "figures not present in the source documents",
@@ -425,15 +442,15 @@
       "expected_answer": null,
       "answer_rubric": {
         "must_mention": [
-          "OCF / ongoing charge comparison with figures",
-          "replication method for both",
-          "SRI score from KID for both",
-          "source attribution for every factual claim"
+          {"item": "OCF / ongoing charge comparison with figures", "keywords": [["0.20%", "0.2%"], ["0.06%", "0.10%", "0.1%"]], "min_match": 2},
+          {"item": "replication method for both", "keywords": [["optimis", "optimiz"], ["full replic", "fully replic"]], "min_match": 2},
+          {"item": "SRI score from KID for both", "keywords": [["4 out of 7", "4/7", "rated 4", "sri of 4", "sri is 4", "sri: 4", "indicator of 4", "class 4", "level 4", "risk class of 4", "score of 4"]], "min_match": 1},
+          {"item": "source attribution for every factual claim", "keywords": [["[IE00B4L5Y983 |"], ["[IE00BD4TXV59 |"]], "min_match": 2}
         ],
         "should_mention": [
-          "domicile of each fund",
-          "distribution policy (acc/dist)",
-          "AUM difference"
+          {"item": "domicile of each fund", "keywords": [["ireland", "irish", "domicile"]], "min_match": 1},
+          {"item": "distribution policy (acc/dist)", "keywords": [["accumulating", "accumulation", "distribution policy", "use of income", "reinvest"]], "min_match": 1},
+          {"item": "AUM difference", "keywords": [["aum", "fund size", "assets under management", "net assets", "share class assets"]], "min_match": 1}
         ],
         "must_not_contain": [
           "hallucinated figures",

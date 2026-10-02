@@ -1,33 +1,39 @@
 """
-evaluate.py — Evaluation scaffold for the ETF RAG pipeline
-ETF RAG Project — Phase 5
+evaluate.py — Evaluation of the ETF RAG pipeline
 
-Measures three things independently:
-  1. Retrieval quality    — are the right chunks retrieved?
-  2. Answer faithfulness  — does the answer contradict the source chunks?
-  3. Attribution accuracy — are sources correctly cited?
+Measures independently:
+  1. Retrieval quality    — are the right documents retrieved? (precision/recall@k)
+  2. Answer correctness   — heuristic: expected key values (Type 1–2) / rubric keywords (Type 4)
+  3. Unsupported numbers  — heuristic: figures in the answer that are absent from the context
+  4. Attribution accuracy — are the right sources cited?
+  5. LLM judge (--judge llm) — correctness, groundedness, rubric and verdict with a
+     motivation, from a different model than the generator (default Claude Sonnet 5.5)
 
 Identifier note: ground truth uses etf_isin (e.g. "IE00B4L5Y983") as the
 primary ETF identifier. source_matches_chunk() matches on (etf_isin, doc_type, year).
 
 Usage:
-    # Full evaluation
-    python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json \
-                       --pipeline_output evaluation/pipeline_output.json \
+    # Heuristic evaluation (no API calls)
+    python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json \\
+                       --pipeline_output evaluation/runs/<run>.json \\
                        --report evaluation/report.json
 
-    # Retrieval-only (before generation is wired up)
-    python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json \
-                       --pipeline_output evaluation/pipeline_output.json \
-                       --retrieval_only
+    # With the LLM judge (costs credit: use --limit / --qids while developing)
+    python evaluation/evaluate.py ... --judge llm [--judge_provider anthropic --judge_model claude-sonnet-5-5]
+
+    # Retrieval-only (output of run_retrieval.py)
+    python evaluation/evaluate.py ... --retrieval_only
 
     # Only a subset (must match the subset the pipeline ran on)
     python evaluation/evaluate.py ... --limit 3
     python evaluation/evaluate.py ... --qids T1_001 T2_003
 
+    # Print metric deltas against an earlier report (e.g. the baseline)
+    python evaluation/evaluate.py ... --compare evaluation/baseline_cloud.json
+
 Pipeline output format — {"run": {...metadata...}, "results": [...]} as written
-by pipeline.py --run_eval (a bare list of results is accepted too), one result
-per question:
+by pipeline.py --run_eval or run_retrieval.py (a bare list of results is accepted
+too), one result per question:
     [
       {
         "qid": "T1_001",
@@ -51,11 +57,18 @@ per question:
     ]
 """
 
+import re
+import sys
 import json
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from typing import Optional
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
+import config  # noqa: E402
 
 
 # ── Result data structures ─────────────────────────────────────────────────────
@@ -73,9 +86,12 @@ class RetrievalResult:
 class FaithfulnessResult:
     qid: str
     query_type: int
-    answer_contains_expected: Optional[bool]  # None for Type 4
+    answer_contains_expected: Optional[bool]  # None when there are no expected_values (Type 4, T2_008)
     rubric_scores: Optional[dict]             # Type 4 only
     has_unsupported_claims: bool
+    expected_details: Optional[dict] = None   # which expected values were found
+    unsupported_numbers: list = field(default_factory=list)
+    abstained: bool = False                   # answer says the documents lack the information
 
 
 @dataclass
@@ -96,6 +112,7 @@ class QuestionEval:
     retrieval: RetrievalResult
     faithfulness: FaithfulnessResult
     attribution: AttributionResult
+    judge: Optional[dict] = None              # --judge llm only
 
 
 # ── Source matching ────────────────────────────────────────────────────────────
@@ -180,64 +197,181 @@ def evaluate_retrieval(question: dict, pipeline_entry: dict) -> RetrievalResult:
     )
 
 
-# ── Faithfulness evaluation ────────────────────────────────────────────────────
+# ── Text and number normalisation ──────────────────────────────────────────────
 
-def _normalise(text: str) -> str:
-    import re
-    text = text.lower()
-    text = re.sub(r"[^\w\s%\.\-]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
+CITATION_RE = re.compile(r"\[[A-Z]{2}[A-Z0-9]{10}\s*\|[^\]]*\]")
+ISIN_RE     = re.compile(r"\b[A-Z]{2}[A-Z0-9]{9}\d\b")
+# 1,309 · 10 000 · 0.20 · 0,20 — optionally followed by %
+NUMBER_RE   = re.compile(r"(?<![\w.,])(\d{1,3}(?:[ ,]\d{3})+(?!\d)|\d+(?:[.,]\d+)?)(\s*%)?")
+ABSTAIN_RE  = re.compile(
+    r"(do(?:es)? not (?:contain|include|specify|provide|state|mention|describe|disclose)\b|"
+    r"\bnot (?:explicitly |clearly )?(?:stated|specified|disclosed|provided|included|mentioned|"
+    r"described|available)\b|cannot (?:adequately |fully )?(?:answer|determine|compare)|"
+    r"insufficient information|no (?:information|details) (?:about|on|regarding))", re.I)
 
 
-def _answer_contains_expected(answer: str, expected: str) -> bool:
-    return _normalise(expected) in _normalise(answer)
+def strip_citations(text: str) -> str:
+    return CITATION_RE.sub(" ", text)
 
 
-def _check_unsupported_claims(answer: str, retrieved: list[dict]) -> bool:
+def drop_abstentions(text: str) -> str:
     """
-    Heuristic: flag if the answer contains numerical figures that do not
-    appear in any retrieved chunk. Proxy for hallucination detection.
-    Upgrade to LLM-as-judge for production eval.
+    Remove sentences that say information is missing: they often list candidate
+    values ("full replication, sampling or synthetic") that must not count as found.
     """
-    import re
-    answer_numbers = set(re.findall(r"\d+\.?\d*\s*%|\d[\d,]+", answer))
-    if not answer_numbers:
-        return False
-    all_text = " ".join(_get(c, "text") for c in retrieved)
-    return any(num not in all_text for num in answer_numbers)
+    sentences = re.split(r"(?<=[.!?])\s+|\n+", text)
+    return " ".join(s for s in sentences if not ABSTAIN_RE.search(s))
+
+
+def _norm_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower()).strip()
+
+
+def _parse_number(token: str) -> float:
+    if re.fullmatch(r"\d{1,3}(?:[ ,]\d{3})+", token):      # thousands separators
+        return float(re.sub(r"[ ,]", "", token))
+    return float(token.replace(",", "."))                  # decimal comma
+
+
+def extract_numbers(text: str, skip_trivial: bool = False) -> list[tuple[float, bool, str]]:
+    """
+    Numbers in `text` as (value, is_percent, original). ISINs are removed first.
+    skip_trivial drops years (1900–2099) and bare integers 0–10 (list markers,
+    "4 out of 7"-style scales), which make the unsupported-numbers check noisy.
+    """
+    text = ISIN_RE.sub(" ", text)
+    out = []
+    for m in NUMBER_RE.finditer(text):
+        token, pct = m.group(1), bool(m.group(2))
+        value = _parse_number(token)
+        if skip_trivial and not pct:
+            is_int = value.is_integer() and not re.search(r"[.,]\d", token)
+            if is_int and (1900 <= value <= 2099 or value <= 10):
+                continue
+        out.append((value, pct, m.group(0).strip()))
+    return out
+
+
+def _is_numeric_value(value: str) -> Optional[tuple[float, bool]]:
+    m = re.fullmatch(r"\s*(\d+(?:[.,]\d+)?)\s*(%)?\s*", value)
+    return (float(m.group(1).replace(",", ".")), bool(m.group(2))) if m else None
+
+
+def value_present(value, text: str) -> bool:
+    """`value` is a string or a list of alternatives; numbers are compared numerically."""
+    alternatives = value if isinstance(value, list) else [value]
+    numbers = None
+    for alt in alternatives:
+        num = _is_numeric_value(str(alt))
+        if num is not None:
+            if numbers is None:
+                numbers = extract_numbers(text)
+            if any(abs(v - num[0]) < 1e-9 and p == num[1] for v, p, _ in numbers):
+                return True
+        elif _norm_text(str(alt)) in _norm_text(text):
+            return True
+    return False
+
+
+# ── Faithfulness evaluation (heuristic) ────────────────────────────────────────
+
+def _entity_segments(text: str, label: str, aliases: dict) -> str:
+    """
+    Part of `text` about the ETF `label` (an ISIN): from each mention of it (ISIN or
+    issuer alias) up to the next mention of another ETF. Whole text if never mentioned.
+    """
+    mentions = []
+    for isin, names in aliases.items():
+        for name in [isin, *names]:
+            for m in re.finditer(re.escape(name), text, re.I):
+                mentions.append((m.start(), isin))
+    mentions.sort()
+    if not any(isin == label for _, isin in mentions):
+        return text
+    parts = []
+    for i, (pos, isin) in enumerate(mentions):
+        if isin != label:
+            continue
+        end = next((p for p, other in mentions[i + 1:] if other != label), len(text))
+        parts.append(text[pos:end])
+    return " ".join(parts)
+
+
+def _answer_contains_expected(question: dict, answer: str) -> tuple[Optional[bool], Optional[dict]]:
+    """
+    Type 1: every value in expected_values must appear in the answer.
+    Type 2: expected_values is {label: [values]}; labels that are ISINs are looked up
+    in the part of the answer about that ETF, other labels in the whole answer.
+    Returns (all found, {label: {value: found}}), or (None, None) without expected_values.
+    """
+    expected = question.get("expected_values")
+    if not expected:
+        return None, None
+    text = drop_abstentions(strip_citations(answer))
+    groups = expected if isinstance(expected, dict) else {"answer": expected}
+    aliases = {s["etf_isin"]: [s["issuer"]] for s in question.get("sources", [])
+               if s.get("etf_isin") and s.get("issuer")}
+
+    details = {}
+    for label, values in groups.items():
+        scope = _entity_segments(text, label, aliases) if label in aliases else text
+        details[label] = {json.dumps(v, ensure_ascii=False) if isinstance(v, list) else v:
+                          value_present(v, scope) for v in values}
+    return all(all(d.values()) for d in details.values()), details
+
+
+def _unsupported_numbers(answer: str, retrieved: list[dict]) -> list[str]:
+    """
+    Figures in the answer (citations, ISINs, years and small integers removed) whose
+    value appears in no retrieved chunk. 0.2% matches 0.20%; 1,309 matches 1309.
+    """
+    context_values = {round(v, 6) for c in retrieved
+                      for v, _, _ in extract_numbers(_get(c, "text"))}
+    missing = []
+    for value, _, original in extract_numbers(strip_citations(answer), skip_trivial=True):
+        if round(value, 6) not in context_values and original not in missing:
+            missing.append(original)
+    return missing
 
 
 def _score_rubric(answer: str, rubric: dict) -> dict:
-    """Score a Type 4 answer against its rubric (keyword heuristic)."""
-    answer_lower = answer.lower()
+    """
+    Heuristic Type 4 rubric score. Items are {"item", "keywords", "min_match"}: an item
+    is met when at least min_match keyword groups (a string or a list of alternatives)
+    appear in the answer. Plain-string items and must_not_contain cannot be checked
+    by keywords: they are reported as None and left to the LLM judge.
+    """
+    answer = drop_abstentions(answer)
 
-    def _check_items(items):
-        return {
-            item: any(kw.lower() in answer_lower for kw in item.split())
-            for item in items
-        }
+    def _check(items):
+        out = {}
+        for it in items:
+            if isinstance(it, dict) and it.get("keywords"):
+                hits = sum(value_present(kw, answer) for kw in it["keywords"])
+                out[it["item"]] = hits >= it.get("min_match", len(it["keywords"]))
+            else:
+                out[it["item"] if isinstance(it, dict) else it] = None
+        return out
 
-    must_mention     = rubric.get("must_mention", [])
-    should_mention   = rubric.get("should_mention", [])
-    must_not_contain = rubric.get("must_not_contain", [])
+    def _score(results):
+        checked = [v for v in results.values() if v is not None]
+        return round(sum(checked) / len(checked), 2) if checked else None
 
-    must_results     = _check_items(must_mention)
-    should_results   = _check_items(should_mention)
-    must_not_results = {item: (item.lower() not in answer_lower) for item in must_not_contain}
+    must_results   = _check(rubric.get("must_mention", []))
+    should_results = _check(rubric.get("should_mention", []))
+    must_not       = {(it["item"] if isinstance(it, dict) else it): None
+                      for it in rubric.get("must_not_contain", [])}
 
-    must_score   = sum(must_results.values())   / len(must_mention)   if must_mention   else 1.0
-    should_score = sum(should_results.values()) / len(should_mention) if should_mention else 1.0
-    must_not_ok  = all(must_not_results.values())
-
+    must_score = _score(must_results)
     return {
         "must_mention":     must_results,
         "should_mention":   should_results,
-        "must_not_contain": must_not_results,
+        "must_not_contain": must_not,
         "summary": {
-            "must_mention_score":   round(must_score, 2),
-            "should_mention_score": round(should_score, 2),
-            "must_not_violated":    must_not_ok,
-            "overall_pass":         must_score == 1.0 and must_not_ok,
+            "must_mention_score":   must_score,
+            "should_mention_score": _score(should_results),
+            "must_not_violated":    None,        # judge only
+            "overall_pass":         must_score == 1.0 if must_score is not None else None,
         },
     }
 
@@ -246,25 +380,25 @@ def evaluate_faithfulness(question: dict, pipeline_entry: dict) -> FaithfulnessR
     query_type = question["query_type"]
     answer     = pipeline_entry.get("generated_answer", "")
     retrieved  = pipeline_entry.get("retrieved_chunks", [])
-    expected   = question.get("expected_answer")
     rubric     = question.get("answer_rubric")
 
-    contains_expected = None
-    rubric_scores     = None
-
-    if query_type in (1, 2, 3) and expected and "<FILL" not in str(expected):
-        contains_expected = _answer_contains_expected(answer, expected)
+    contains_expected, details, rubric_scores = None, None, None
+    if query_type in (1, 2, 3):
+        contains_expected, details = _answer_contains_expected(question, answer)
     elif query_type == 4 and rubric:
         rubric_scores = _score_rubric(answer, rubric)
 
-    unsupported = _check_unsupported_claims(answer, retrieved)
+    unsupported = _unsupported_numbers(answer, retrieved)
 
     return FaithfulnessResult(
         qid=question["qid"],
         query_type=query_type,
         answer_contains_expected=contains_expected,
         rubric_scores=rubric_scores,
-        has_unsupported_claims=unsupported,
+        has_unsupported_claims=bool(unsupported),
+        expected_details=details,
+        unsupported_numbers=unsupported,
+        abstained=bool(ABSTAIN_RE.search(answer)),
     )
 
 
@@ -305,88 +439,56 @@ def evaluate_attribution(question: dict, pipeline_entry: dict) -> AttributionRes
 
 # ── Aggregate metrics ──────────────────────────────────────────────────────────
 
-def aggregate(results: list[QuestionEval]) -> dict:
-    def _mean(vals):
-        return round(sum(vals) / len(vals), 3) if vals else 0.0
+_CORRECTNESS_SCORE = {"correct": 1.0, "partially_correct": 0.5, "incorrect": 0.0, "abstained": 0.0}
 
-    overall = {
-        "n": len(results),
-        "retrieval_precision_mean": _mean([r.retrieval.precision_at_k for r in results]),
-        "retrieval_recall_mean":    _mean([r.retrieval.recall_at_k    for r in results]),
-        "any_relevant_pct":         _mean([float(r.retrieval.any_relevant_retrieved) for r in results]),
-        "attribution_score_mean":   _mean([r.attribution.attribution_score for r in results]),
-        "faithfulness_pass_pct":    _mean([
-            float(r.faithfulness.answer_contains_expected)
-            for r in results
-            if r.faithfulness.answer_contains_expected is not None
-        ]),
-        "unsupported_claims_pct": _mean([
-            float(r.faithfulness.has_unsupported_claims) for r in results
-        ]),
+
+def _mean(vals):
+    vals = list(vals)
+    return round(sum(vals) / len(vals), 3) if vals else None
+
+
+def _judge_metrics(results: list[QuestionEval]) -> dict:
+    judged = [r.judge for r in results if r.judge and "error" not in r.judge]
+    if not judged:
+        return {}
+    scored = [_CORRECTNESS_SCORE[j["correctness"]] for j in judged if j["correctness"] in _CORRECTNESS_SCORE]
+    return {
+        "judge_n":             len(judged),
+        "judge_pass_pct":      _mean(float(j["verdict"] == "pass") for j in judged),
+        "judge_score_mean":    _mean({"pass": 1.0, "partial": 0.5, "fail": 0.0}[j["verdict"]] for j in judged),
+        "judge_correct_mean":  _mean(scored),
+        "judge_grounded_pct":  _mean(float(j["grounded"]) for j in judged),
+        "judge_abstained_pct": _mean(float(j["correctness"] == "abstained") for j in judged),
     }
 
-    by_type = {}
-    for qt in (1, 2, 3, 4):
-        subset = [r for r in results if r.query_type == qt]
-        if not subset:
-            continue
-        by_type[f"type_{qt}"] = {
-            "n":                        len(subset),
-            "retrieval_precision_mean": _mean([r.retrieval.precision_at_k for r in subset]),
-            "retrieval_recall_mean":    _mean([r.retrieval.recall_at_k    for r in subset]),
-            "attribution_score_mean":   _mean([r.attribution.attribution_score for r in subset]),
-        }
 
-    by_difficulty = {}
-    for diff in ("easy", "medium", "hard"):
-        subset = [r for r in results if r.difficulty == diff]
-        if not subset:
-            continue
-        by_difficulty[diff] = {
-            "n":                        len(subset),
-            "retrieval_precision_mean": _mean([r.retrieval.precision_at_k for r in subset]),
-            "retrieval_recall_mean":    _mean([r.retrieval.recall_at_k    for r in subset]),
-        }
-
-    return {"overall": overall, "by_query_type": by_type, "by_difficulty": by_difficulty}
+def _metrics(results: list[QuestionEval]) -> dict:
+    m = {
+        "n": len(results),
+        "retrieval_precision_mean": _mean(r.retrieval.precision_at_k for r in results),
+        "retrieval_recall_mean":    _mean(r.retrieval.recall_at_k    for r in results),
+        "any_relevant_pct":         _mean(float(r.retrieval.any_relevant_retrieved) for r in results),
+        "attribution_score_mean":   _mean(r.attribution.attribution_score for r in results),
+        "expected_values_pass_pct": _mean(
+            float(r.faithfulness.answer_contains_expected) for r in results
+            if r.faithfulness.answer_contains_expected is not None),
+        "rubric_must_mention_mean": _mean(
+            r.faithfulness.rubric_scores["summary"]["must_mention_score"] for r in results
+            if r.faithfulness.rubric_scores
+            and r.faithfulness.rubric_scores["summary"]["must_mention_score"] is not None),
+        "unsupported_numbers_pct":  _mean(float(r.faithfulness.has_unsupported_claims) for r in results),
+        "abstained_pct":            _mean(float(r.faithfulness.abstained) for r in results),
+    }
+    m.update(_judge_metrics(results))
+    return m
 
 
-# ── LLM-as-judge stub ─────────────────────────────────────────────────────────
-# Uncomment once generation is wired up. Replaces heuristic rubric scoring
-# for Type 4 questions with a grounded Claude judgment.
-
-# def evaluate_faithfulness_llm(question: dict, pipeline_entry: dict) -> dict:
-#     import anthropic
-#     client = anthropic.Anthropic()
-#     context = "\n\n---\n\n".join(
-#         f"[{_get(c, 'etf_isin')} | {_get(c, 'doc_type')} | {_get(c, 'year')}]\n{_get(c, 'text')}"
-#         for c in pipeline_entry.get("retrieved_chunks", [])
-#     )
-#     rubric_str = json.dumps(question.get("answer_rubric", {}), indent=2)
-#     prompt = f"""You are evaluating a RAG system answer about ETF documents.
-#
-# QUESTION: {question['question']}
-#
-# RETRIEVED CONTEXT:
-# {context}
-#
-# GENERATED ANSWER:
-# {pipeline_entry.get('generated_answer', '')}
-#
-# RUBRIC:
-# {rubric_str}
-#
-# Score the answer:
-# 1. Does it cover all must_mention items? (yes/no + list any missing)
-# 2. Does it violate any must_not_contain items? (yes/no)
-# 3. Is every factual claim grounded in the retrieved context? (yes/no)
-# Respond in JSON only."""
-#     response = client.messages.create(
-#         model="claude-sonnet-4-20250514",
-#         max_tokens=1000,
-#         messages=[{"role": "user", "content": prompt}]
-#     )
-#     return json.loads(response.content[0].text)
+def aggregate(results: list[QuestionEval]) -> dict:
+    by_type = {f"type_{qt}": _metrics([r for r in results if r.query_type == qt])
+               for qt in (1, 2, 3, 4) if any(r.query_type == qt for r in results)}
+    by_difficulty = {d: _metrics([r for r in results if r.difficulty == d])
+                     for d in ("easy", "medium", "hard") if any(r.difficulty == d for r in results)}
+    return {"overall": _metrics(results), "by_query_type": by_type, "by_difficulty": by_difficulty}
 
 
 # ── Main eval loop ─────────────────────────────────────────────────────────────
@@ -418,7 +520,10 @@ def run_evaluation(
     retrieval_only: bool = False,
     qids: Optional[list] = None,
     limit: Optional[int] = None,
-) -> tuple[list[QuestionEval], dict]:
+    judge_llm=None,
+    judge_effort: Optional[str] = None,
+) -> tuple[list[QuestionEval], dict, str]:
+    """Returns (per-question results, summary, judge status)."""
 
     gt_data = json.loads(ground_truth_path.read_text(encoding="utf-8"))
     po_data, _ = load_pipeline_output(pipeline_output_path)
@@ -429,6 +534,7 @@ def run_evaluation(
 
     results: list[QuestionEval] = []
     missing_qids = []
+    judge_status = "off" if judge_llm is None else "complete"
 
     _empty_faithful = lambda qid, qt: FaithfulnessResult(
         qid=qid, query_type=qt,
@@ -440,6 +546,10 @@ def run_evaluation(
         correct_sources_cited=False, wrong_sources_cited=False,
         attribution_score=0.0,
     )
+
+    if judge_llm is not None:
+        from judge import judge_question
+        from llm import BudgetExceededError, LLMError
 
     for qid, question in questions.items():
         if qid not in pipeline_out:
@@ -453,6 +563,19 @@ def run_evaluation(
         faithfulness = _empty_faithful(qid, qt) if retrieval_only else evaluate_faithfulness(question, entry)
         attribution  = _empty_attr(qid, qt)     if retrieval_only else evaluate_attribution(question, entry)
 
+        verdict = None
+        if judge_llm is not None and judge_status == "complete":
+            try:
+                verdict = judge_question(judge_llm, question, entry, effort=judge_effort)
+                label = verdict.get("verdict") or f"error: {verdict.get('error')}"
+                print(f"  [judge] {qid}: {label}")
+            except BudgetExceededError as e:
+                judge_status = "partial (budget)"
+                print(f"  [judge] STOPPED: {e}")
+            except LLMError as e:
+                verdict = {"error": str(e)}
+                print(f"  [judge] {qid}: error: {e}")
+
         results.append(QuestionEval(
             qid=qid,
             query_type=qt,
@@ -461,15 +584,20 @@ def run_evaluation(
             retrieval=retrieval,
             faithfulness=faithfulness,
             attribution=attribution,
+            judge=verdict,
         ))
 
     if missing_qids:
         print(f"[warn] {len(missing_qids)} questions missing from pipeline output: {missing_qids}")
 
-    return results, aggregate(results)
+    return results, aggregate(results), judge_status
 
 
-# ── Console summary ────────────────────────────────────────────────────────────
+# ── Console output ─────────────────────────────────────────────────────────────
+
+def _pct(v) -> str:
+    return "  n/a" if v is None else f"{v:.1%}"
+
 
 def print_summary(summary: dict) -> None:
     print("\n" + "═" * 56)
@@ -478,27 +606,84 @@ def print_summary(summary: dict) -> None:
 
     ov = summary["overall"]
     print(f"\n  Overall  (n={ov['n']})")
-    print(f"  Retrieval Precision@k  : {ov['retrieval_precision_mean']:.1%}")
-    print(f"  Retrieval Recall@k     : {ov['retrieval_recall_mean']:.1%}")
-    print(f"  Any Relevant Retrieved : {ov['any_relevant_pct']:.1%}")
-    print(f"  Attribution Score      : {ov['attribution_score_mean']:.1%}")
-    print(f"  Faithfulness Pass      : {ov.get('faithfulness_pass_pct', 0):.1%}")
-    print(f"  Unsupported Claims     : {ov['unsupported_claims_pct']:.1%}")
+    print(f"  Retrieval Precision@k  : {_pct(ov['retrieval_precision_mean'])}")
+    print(f"  Retrieval Recall@k     : {_pct(ov['retrieval_recall_mean'])}")
+    print(f"  Any Relevant Retrieved : {_pct(ov['any_relevant_pct'])}")
+    print(f"  Attribution Score      : {_pct(ov['attribution_score_mean'])}")
+    print(f"  Expected Values Found  : {_pct(ov['expected_values_pass_pct'])}   (heuristic, Type 1–2)")
+    print(f"  Rubric must_mention    : {_pct(ov['rubric_must_mention_mean'])}   (heuristic, Type 4)")
+    print(f"  Unsupported Numbers    : {_pct(ov['unsupported_numbers_pct'])}   (heuristic)")
+    print(f"  Abstained              : {_pct(ov['abstained_pct'])}   (heuristic)")
+    if "judge_n" in ov:
+        print(f"\n  LLM judge  (n={ov['judge_n']})")
+        print(f"  Verdict pass           : {_pct(ov['judge_pass_pct'])}")
+        print(f"  Verdict score (p=1,½)  : {_pct(ov['judge_score_mean'])}")
+        print(f"  Correctness            : {_pct(ov['judge_correct_mean'])}")
+        print(f"  Grounded               : {_pct(ov['judge_grounded_pct'])}")
+        print(f"  Abstained              : {_pct(ov['judge_abstained_pct'])}")
 
     print("\n  By Query Type")
-    for label, stats in summary.get("by_query_type", {}).items():
-        print(f"  {label}  (n={stats['n']}):  "
-              f"P={stats['retrieval_precision_mean']:.1%}  "
-              f"R={stats['retrieval_recall_mean']:.1%}  "
-              f"Attr={stats['attribution_score_mean']:.1%}")
+    for label, s in summary.get("by_query_type", {}).items():
+        judge = f"  Judge={_pct(s.get('judge_pass_pct'))}" if "judge_n" in s else ""
+        print(f"  {label}  (n={s['n']}):  P={_pct(s['retrieval_precision_mean'])}  "
+              f"R={_pct(s['retrieval_recall_mean'])}  Attr={_pct(s['attribution_score_mean'])}{judge}")
 
     print("\n  By Difficulty")
-    for diff, stats in summary.get("by_difficulty", {}).items():
-        print(f"  {diff:6s}  (n={stats['n']}):  "
-              f"P={stats['retrieval_precision_mean']:.1%}  "
-              f"R={stats['retrieval_recall_mean']:.1%}")
+    for diff, s in summary.get("by_difficulty", {}).items():
+        judge = f"  Judge={_pct(s.get('judge_pass_pct'))}" if "judge_n" in s else ""
+        print(f"  {diff:6s}  (n={s['n']}):  P={_pct(s['retrieval_precision_mean'])}  "
+              f"R={_pct(s['retrieval_recall_mean'])}{judge}")
 
     print("═" * 56 + "\n")
+
+
+def print_run_cost(run: dict) -> None:
+    """Tokens and cost of the pipeline run being scored."""
+    if not run:
+        print("  Pipeline run: no metadata (old output format)")
+        return
+    t = run.get("totals", {})
+    cost = t.get("cost_usd")
+    cost = f"${cost:.4f}" if cost is not None else "unknown"
+    print(f"  Pipeline run: {run.get('provider')}/{run.get('model')}  "
+          f"[{run.get('status')}, {run.get('n_questions')} q, {run.get('started_at')}]")
+    print(f"  Tokens in={t.get('input_tokens')} out={t.get('output_tokens')} "
+          f"cache_read={t.get('cache_read_tokens')}  |  est. cost {cost}")
+
+
+def _flatten(summary: dict) -> dict:
+    flat = {f"overall.{k}": v for k, v in summary.get("overall", {}).items()}
+    for group in ("by_query_type", "by_difficulty"):
+        for label, metrics in summary.get(group, {}).items():
+            flat.update({f"{label}.{k}": v for k, v in metrics.items()})
+    return flat
+
+
+def print_comparison(current: dict, reference_path: Path) -> dict:
+    """Print metric deltas (current − reference) and return them."""
+    ref = json.loads(reference_path.read_text(encoding="utf-8"))
+    ref_flat, cur_flat = _flatten(ref.get("summary", {})), _flatten(current)
+    # Older reports used different names for the same heuristics
+    renamed = {"faithfulness_pass_pct": "expected_values_pass_pct",
+               "unsupported_claims_pct": "unsupported_numbers_pct"}
+    ref_flat = {next((k.replace(o, n) for o, n in renamed.items() if k.endswith(o)), k): v
+                for k, v in ref_flat.items()}
+
+    print(f"  Comparison with {reference_path}")
+    print(f"  {'metric':44s} {'ref':>8s} {'now':>8s} {'delta':>8s}")
+    deltas = {}
+    for key, now in cur_flat.items():
+        if key.endswith(".n") or key.endswith("judge_n"):
+            continue
+        before = ref_flat.get(key)
+        if isinstance(now, (int, float)) and isinstance(before, (int, float)):
+            deltas[key] = round(now - before, 3)
+            mark = "" if abs(deltas[key]) < 1e-9 else ("  ▲" if deltas[key] > 0 else "  ▼")
+            print(f"  {key:44s} {before:8.3f} {now:8.3f} {deltas[key]:+8.3f}{mark}")
+        elif before is None and isinstance(now, (int, float)) and key.startswith("overall."):
+            print(f"  {key:44s} {'—':>8s} {now:8.3f}      new")
+    print()
+    return deltas
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
@@ -507,49 +692,84 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Evaluate ETF RAG pipeline")
     p.add_argument("--ground_truth",    type=Path, required=True)
     p.add_argument("--pipeline_output", type=Path, required=True,
-                   help="JSON list of pipeline outputs, one entry per qid")
+                   help="Run file from pipeline.py / run_retrieval.py")
     p.add_argument("--report",          type=Path,
                    default=Path("evaluation/report.json"),
                    help="Where to write the full per-question report")
     p.add_argument("--retrieval_only",  action="store_true",
-                   help="Skip faithfulness and attribution — useful before generation is wired up")
+                   help="Skip answer scoring and attribution (output of run_retrieval.py)")
+    p.add_argument("--judge",           choices=["heuristic", "llm"], default="heuristic",
+                   help="heuristic: no API calls (default). llm: add the LLM judge (costs credit)")
+    p.add_argument("--judge_provider",  default=None,
+                   help="Judge provider (default: JUDGE_PROVIDER from .env)")
+    p.add_argument("--judge_model",     default=None,
+                   help="Judge model (default: JUDGE_MODEL from .env, else provider default)")
     p.add_argument("--qids",            nargs="+", default=None,
                    help="Only evaluate these question ids")
     p.add_argument("--limit",           type=int, default=None,
                    help="Only evaluate the first N (selected) questions")
+    p.add_argument("--compare",         type=Path, default=None,
+                   help="Earlier report (e.g. evaluation/baseline_cloud.json) to print deltas against")
     return p
-
-
-def print_run_cost(run: dict) -> None:
-    """Tokens and cost of the pipeline run being scored (the scorer itself makes no LLM calls yet)."""
-    if not run:
-        print("  Pipeline run: no metadata (old output format)\n")
-        return
-    t = run.get("totals", {})
-    cost = t.get("cost_usd")
-    cost = f"${cost:.4f}" if cost is not None else "unknown"
-    print(f"  Pipeline run: {run.get('provider')}/{run.get('model')}  "
-          f"[{run.get('status')}, {run.get('n_questions')} q, {run.get('started_at')}]")
-    print(f"  Tokens in={t.get('input_tokens')} out={t.get('output_tokens')} "
-          f"cache_read={t.get('cache_read_tokens')}  |  est. cost {cost}\n")
 
 
 def main():
     args = build_parser().parse_args()
-    results, summary = run_evaluation(
+
+    judge_llm = None
+    if args.judge == "llm":
+        if args.retrieval_only:
+            raise SystemExit("--judge llm needs generated answers (not --retrieval_only)")
+        from llm import get_llm
+        judge_llm = get_llm("judge", args.judge_provider, args.judge_model)
+        print(f"[judge] {judge_llm.provider} / {judge_llm.model}  effort={config.JUDGE_EFFORT}")
+
+    results, summary, judge_status = run_evaluation(
         args.ground_truth,
         args.pipeline_output,
         retrieval_only=args.retrieval_only,
         qids=args.qids,
         limit=args.limit,
+        judge_llm=judge_llm,
+        judge_effort=config.JUDGE_EFFORT,
     )
     print_summary(summary)
     _, run = load_pipeline_output(args.pipeline_output)
     print_run_cost(run)
 
+    judge_cost = None
+    if judge_llm is not None:
+        from llm import SESSION
+        judge_cost = round(SESSION.cost_usd, 6)
+        print(f"  Judge: {SESSION.summary()}  [{judge_status}]")
+        run_cost = (run.get("totals") or {}).get("cost_usd") or 0.0
+        print(f"  Total (pipeline + judge): est. ${run_cost + judge_cost:.4f}")
+    print()
+
+    deltas = print_comparison(summary, args.compare) if args.compare else None
+
     report = {
+        "meta": {
+            "created_at":       datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "ground_truth":     str(args.ground_truth),
+            "pipeline_output":  str(args.pipeline_output),
+            "provider":         run.get("provider"),
+            "model":            run.get("model"),
+            "judge":            args.judge,
+            "judge_provider":   judge_llm.provider if judge_llm else None,
+            "judge_model":      judge_llm.model if judge_llm else None,
+            "judge_effort":     config.JUDGE_EFFORT if judge_llm else None,
+            "judge_status":     judge_status,
+            "judge_cost_usd":   judge_cost,
+            "embedding_model":  config.EMBEDDING_MODEL,
+            "chunk_sizes":      config.CHUNK_SIZES,
+            "chunk_overlaps":   config.CHUNK_OVERLAPS,
+            "subset":           {"qids": args.qids, "limit": args.limit},
+            "retrieval_only":   args.retrieval_only,
+        },
         "pipeline_run": run,
         "summary": summary,
+        "compared_with": {"report": str(args.compare), "deltas": deltas} if args.compare else None,
         "per_question": [
             {
                 "qid":              r.qid,
@@ -559,12 +779,13 @@ def main():
                 "retrieval":        asdict(r.retrieval),
                 "faithfulness":     asdict(r.faithfulness),
                 "attribution":      asdict(r.attribution),
+                "judge":            r.judge,
             }
             for r in results
         ],
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(json.dumps(report, indent=2))
+    args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Full report → {args.report}")
 
 
