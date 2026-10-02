@@ -112,7 +112,7 @@ class CostTracker:
         if self.max_cost_usd is not None and self.cost_usd >= self.max_cost_usd:
             raise BudgetExceededError(
                 f"Estimated cost ${self.cost_usd:.4f} reached the budget "
-                f"${self.max_cost_usd:.2f} (LLM_MAX_COST_USD)."
+                f"${self.max_cost_usd:g} (LLM_MAX_COST_USD)."
             )
 
     def snapshot(self) -> tuple:
