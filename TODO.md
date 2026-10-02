@@ -6,6 +6,13 @@ Roadmap derivata dalla review del progetto (settembre 2026, riordinata il 01/10/
 (fase 2) *prima* della revisione della valutazione (fase 3): il judge LLM della fase 3 richiede un modello in cloud,
 e senza modello locale non è possibile rimisurare la generazione del 3B.
 
+**Decisione (02/10/2026): provider principale = Claude via API Anthropic** (chiave già disponibile, credito prepagato 5 $),
+con supporto al cambio di provider tramite `.env`. Il credito è limitato: durante lo sviluppo usare sottoinsiemi
+di domande (`--limit`, `--qids`) e lanciare le valutazioni complete solo a fine fase.
+
+**Workflow git: si lavora solo su `main`, nessun branch.** Un commit per task completato (messaggio che cita il numero
+del task, es. `2.3: backend OpenAI-compatibile`), push su `origin/main` a fine fase.
+
 **Riferimenti di metrica**
 - `evaluation/baseline_llama3.2-3b.json` — solo **storico**: misurato su indice sporco (chunk triplicati) e con scorer
   difettoso, quindi **non confrontabile** con le run future.
@@ -19,9 +26,12 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ## Fase 0 — Preparazione
 
-- [x] **0.1 Branch di lavoro** — creare `refactor/cloud-llm` da `main`.
+- [x] **0.1 Branch di lavoro** — ~~creare `refactor/cloud-llm` da `main`~~. Superato: il lavoro della fase 1 è già stato integrato in `main`; da ora si lavora solo su `main` (vedi 0.3).
 - [x] **0.2 Salvare la baseline** — copiare `evaluation/report.json` in `evaluation/baseline_llama3.2-3b.json` per confronto futuro.
   - Done quando: il file baseline esiste e non viene sovrascritto dalle run successive.
+- [ ] **0.3 Eliminare il branch `refactor/cloud-llm`**
+  - Verificare che sia interamente contenuto in `main` (`git branch --merged main` deve elencarlo), poi `git branch -d refactor/cloud-llm`; se esiste anche su GitHub, `git push origin --delete refactor/cloud-llm`.
+  - Done quando: `git branch -a` mostra solo `main` (e `origin/main`).
 
 ---
 
@@ -56,52 +66,81 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ---
 
-## Fase 2 — Migrazione a LLM in cloud (rimozione di Ollama)
+## Fase 2 — Migrazione a LLM in cloud: Claude (Anthropic) + provider intercambiabili
 
-- [ ] **2.1 Client LLM unico** — nuovo `src/llm.py`:
-  - `PROVIDERS = {groq, gemini, openrouter}` → base_url compatibili OpenAI
-    (`https://api.groq.com/openai/v1`, `https://generativelanguage.googleapis.com/v1beta/openai/`, `https://openrouter.ai/api/v1`).
-    Struttura a dizionario: aggiungere un provider (anche a pagamento) = una riga.
-  - Lettura da env (via `config.py`): `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`. Nessun nome di modello hard-coded nel codice: dipende dalla console del provider.
-  - `get_client() -> (OpenAI, model_name)`; errore chiaro se la chiave manca.
-  - Retry con backoff esponenziale su 429/5xx e throttling configurabile (`LLM_MIN_INTERVAL_S`): i free tier hanno limiti per minuto (es. Groq ~30 RPM / pochi k token/min).
-  - Done quando: `src/llm.py` esiste e una chiamata di prova (`uv run python src/llm.py --ping`) risponde.
+Obiettivo: **Claude via API Anthropic come provider principale** (chiave già disponibile, credito prepagato 5 $),
+con un'architettura che permetta di cambiare provider (Groq, Gemini, OpenRouter, …) **solo modificando `.env`**, senza toccare il codice.
 
-- [ ] **2.2 `.env` + configurazione**
-  - `.env.example` committato (senza chiavi reali) con `LLM_PROVIDER`, `LLM_API_KEY`, `LLM_MODEL`, `LLM_MIN_INTERVAL_S`; `.env` già in `.gitignore` (verificare).
-  - `config.py` carica `.env` con `python-dotenv` (già tra le dipendenze in `pyproject.toml`).
-  - Done quando: copiando `.env.example` in `.env` e inserendo la chiave, tutto funziona senza altri passaggi.
+Scelte di progetto:
+- Backend **nativo** per Anthropic (SDK `anthropic`, non il layer compatibile OpenAI, che la documentazione Anthropic sconsiglia fuori dai test e che non supporta prompt caching, citazioni native e schema garantito dei tool).
+- Backend **OpenAI-compatibile** generico per tutti gli altri provider (client `openai` già presente).
+- Il resto del codice (`generate.py`, `agent.py`, `evaluate.py`) usa **solo un'interfaccia neutra** e non sa quale provider c'è sotto.
+- Modelli di default: generazione/agent `claude-haiku-4-5-20251001` (1 $ / 5 $ per M token in/out); judge della fase 3 `claude-sonnet-5-5` (2 $ / 10 $). Verificare gli identificativi nella documentazione Anthropic prima di fissarli in `.env.example`.
 
-- [ ] **2.3 Rimuovere Ollama da `generate.py` e `agent.py`**
-  - Usare `get_client()` al posto di `OpenAI(base_url=OLLAMA_BASE_URL, …)`; eliminare `OLLAMA_BASE_URL`, `DEFAULT_MODEL = "llama3.2:3b"` / `"mistral:7b"`, `_check_connection` / `_check_model` specifici di Ollama.
-  - Flag CLI `--provider` e `--model` che sovrascrivono l'env (anche in `ask.py` e `pipeline.py`).
-  - Done quando: `grep -rni "ollama\|11434\|llama3.2\|mistral:7b" src/` non restituisce nulla.
+- [ ] **2.1 Interfaccia LLM neutra** — nuovo pacchetto/modulo `src/llm/` (o `src/llm.py` se resta piccolo):
+  - Tipi neutri: `Message(role, content, tool_calls?, tool_call_id?)`, `ToolSpec(name, description, parameters_json_schema)`, `ToolCall(id, name, arguments: dict)`, `LLMResponse(text, tool_calls, usage: Usage(input_tokens, output_tokens, cache_read_tokens, cache_write_tokens), model, provider, stop_reason)`.
+  - Interfaccia `LLMClient` con un solo metodo: `chat(messages, *, system=None, tools=None, temperature=0.0, max_tokens=1024) -> LLMResponse`.
+  - Factory `get_llm(role="generator"|"judge") -> LLMClient` che legge la configurazione (2.4).
+  - Done quando: `generate.py` e `agent.py` possono essere scritti senza importare né `openai` né `anthropic`.
 
-- [ ] **2.4 Robustezza minima del loop in `agent.py`** (necessaria per provider diversi da Ollama)
-  - Decidere sui tool call con `if message.tool_calls:` invece di `finish_reason == "tool_calls"` (inaffidabile tra provider).
-  - Gestire `message.content is None` (niente `.strip()` su None).
-  - Argomenti JSON malformati → messaggio d'errore restituito al modello come risultato del tool, non eccezione.
-  - Done quando: `uv run python src/agent.py --query "..." --show_calls` funziona con almeno due provider.
+- [ ] **2.2 Backend Anthropic (nativo, default)** — `AnthropicClient(LLMClient)`:
+  - `uv add anthropic`; `anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)` → `client.messages.create(...)`.
+  - Conversione formati: `system` come parametro separato (non come messaggio); tool definiti con `input_schema`; risposta con blocchi `text` / `tool_use` → `LLMResponse`; risultati dei tool inviati come blocchi `tool_result` in un messaggio `user`.
+  - Gestione errori: retry con backoff su 429/529/5xx (`anthropic.RateLimitError`, `APIStatusError`); errore chiaro su credito esaurito / chiave non valida (non ritentare).
+  - Prompt caching sul blocco `system` + definizioni dei tool (si ripetono a ogni iterazione dell'agent): `cache_control` sull'ultimo blocco stabile. Verificare nella documentazione la soglia minima di token cacheabili per Haiku; se il prompt è sotto soglia, lasciare il codice pronto ma senza effetto.
+  - Done quando: `uv run python -m ... --ping` (o `uv run python src/llm/cli.py --ping`) risponde con Haiku e stampa token e costo.
 
-- [ ] **2.5 Aggiornare `setup.py`**
-  - Rimuovere `check_ollama`, `--skip_ollama`, `--model` e tutti i messaggi su `ollama pull`.
-  - Nuovo check: `LLM_API_KEY` impostata + chiamata di prova al provider; se fallisce, il setup completa comunque l'indice e lo segnala (modalità retrieval-only).
+- [ ] **2.3 Backend OpenAI-compatibile (provider alternativi)** — `OpenAICompatClient(LLMClient)`:
+  - Registro provider: `{"groq": "https://api.groq.com/openai/v1", "gemini": "https://generativelanguage.googleapis.com/v1beta/openai/", "openrouter": "https://openrouter.ai/api/v1"}`; aggiungere un provider = una riga.
+  - Conversione tool/messaggi da/verso il formato OpenAI (`tools=[{"type":"function",...}]`, `message.tool_calls`, ruolo `tool`).
+  - Decidere sui tool call con `if message.tool_calls:` (non `finish_reason`), gestire `content is None`.
+  - Done quando: lo stesso `--ping` funziona con `LLM_PROVIDER=groq` (se si dispone di una chiave; altrimenti coperto da test mockati in 8.5).
+
+- [ ] **2.4 Configurazione e `.env`**
+  - Variabili: `LLM_PROVIDER` (default `anthropic`), `LLM_MODEL`, `JUDGE_PROVIDER`, `JUDGE_MODEL`, chiavi **per provider** `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY` (così si cambia provider cambiando solo `LLM_PROVIDER`/`LLM_MODEL`), `LLM_MIN_INTERVAL_S`, `LLM_MAX_COST_USD`.
+  - `config.py` carica `.env` con `python-dotenv`; `.env.example` committato senza chiavi; verificare che `.env` sia in `.gitignore` e **mai** committato.
+  - Precedenza: flag CLI `--provider` / `--model` > variabili d'ambiente > default in `config.py`.
+  - Done quando: passare da Claude a un altro provider richiede solo di modificare `.env` (o un flag CLI).
+
+- [ ] **2.5 Tracciamento costi e protezione del credito** (credito disponibile: 5 $)
+  - Tabella prezzi per modello in `config.py` (o `src/llm/pricing.py`), facilmente aggiornabile; prezzo sconosciuto → costo `null` + warning, non errore.
+  - Ogni `LLMResponse` accumula token e costo stimato in un contatore di sessione; `ask.py`/`agent.py` mostrano il costo della domanda con `--show_cost`; `pipeline.py` e `evaluate.py` stampano il totale a fine run.
+  - Budget per run: se il costo stimato supera `LLM_MAX_COST_USD` (default 0.50) la run si interrompe salvando i risultati parziali.
+  - `pipeline.py` / `evaluate.py`: opzioni `--limit N` e `--qids T1_001 T2_003 …` per lavorare su sottoinsiemi durante lo sviluppo.
+  - Done quando: ogni run riporta token e costo; una run oltre budget si ferma senza perdere i risultati già ottenuti.
+
+- [ ] **2.6 Rimuovere Ollama e usare l'interfaccia in `generate.py`, `agent.py`, `ask.py`, `pipeline.py`**
+  - Eliminare `OLLAMA_BASE_URL`, `DEFAULT_MODEL = "llama3.2:3b"` / `"mistral:7b"`, `_check_connection` / `_check_model`, ogni `OpenAI(...)` diretto.
+  - `agent.py`: `TOOLS` riscritti come `ToolSpec` neutri; il loop usa `LLMResponse.tool_calls`; argomenti malformati → errore restituito al modello come risultato del tool; history dei messaggi in formato neutro.
+  - Done quando: `grep -rniE "ollama|11434|llama3\.2|mistral:7b|from openai|import anthropic" src/` trova solo i file dei backend in `src/llm/`.
+
+- [ ] **2.7 Aggiornare `setup.py`**
+  - Rimuovere `check_ollama`, `--skip_ollama`, `--model` e i messaggi su `ollama pull`; aggiungere `anthropic` alla lista dei pacchetti verificati.
+  - Nuovo check: chiave del provider configurato presente + chiamata `--ping` minima (pochi token); se fallisce, l'indice viene comunque costruito e il setup segnala la modalità retrieval-only.
   - Done quando: `uv run python setup.py` gira da zero senza alcun riferimento a Ollama.
 
-- [ ] **2.6 Metadati della run** — `pipeline.py` salva in `pipeline_output.json` `provider`, `model`, timestamp e token usati (oggi `model` è `None`).
+- [ ] **2.8 Metadati della run** — `pipeline_output.json` salva `provider`, `model`, timestamp, token (input/output/cache) e costo stimato per domanda e totale (oggi `model` è `None`).
 
-- [ ] **2.7 Smoke test end-to-end**
-  - `uv run python src/ask.py --query "What is the TER of the iShares Core MSCI World ETF?"` e una domanda comparativa.
-  - Pipeline completa sulle 17 domande con il provider principale; salvare l'output in `evaluation/runs/` (non sovrascrivere).
-  - Done quando: tutte le 17 domande producono una risposta senza errori di rete/rate limit. Le metriche **non** sono ancora affidabili (fase 3).
+- [ ] **2.9 Smoke test end-to-end (economico)**
+  - `uv run python src/ask.py --query "What is the TER of the iShares Core MSCI World ETF?" --show_cost` + una domanda comparativa + `agent.py --show_calls` su una domanda che usa `get_live_data`.
+  - Pipeline su `--limit 3`, poi sulle 17 domande una sola volta; output in `evaluation/runs/` (non sovrascrivere).
+  - Done quando: tutte le 17 domande producono una risposta senza errori; costo totale riportato. Le metriche **non** sono ancora affidabili (fase 3).
 
-- [ ] **2.8 Documentazione minima** — aggiornare `CLAUDE.md` (sezioni Commands/Architecture: niente più Ollama né `--skip_ollama`) e la sezione "Prerequisites" del `README.md` (provider cloud + `.env`). Il README completo resta nel task 8.7.
+- [ ] **2.10 Documentazione: `README.md`** — nuova sezione **"LLM provider"** (sostituisce "Ollama" e aggiorna "Prerequisites"):
+  - provider di default (Claude Haiku 4.5 via API Anthropic) e come ottenere/inserire la chiave (`cp .env.example .env`);
+  - tabella delle variabili d'ambiente (2.4) con esempi;
+  - **come cambiare provider**: esempio completo di `.env` per Anthropic e per Groq/Gemini/OpenRouter, e override da CLI (`--provider`, `--model`);
+  - **come aggiungere un nuovo provider** (una riga nel registro se OpenAI-compatibile, altrimenti un nuovo backend che implementa `LLMClient`);
+  - costi indicativi, `--show_cost`, `LLM_MAX_COST_USD`, `--limit`;
+  - nota: la chiave non va mai committata.
+  - Aggiornare anche `CLAUDE.md` (Commands/Architecture: niente Ollama, nuova architettura `src/llm/`, variabili d'ambiente).
+  - Done quando: una persona che clona il repo configura e cambia provider seguendo solo il README.
 
 ---
 
 ## Fase 3 — Valutazione affidabile
 
-Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare sull'output della fase 2.7; il judge (3.4) richiede il client cloud.
+Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare sull'output della fase 2.9 senza nuove chiamate API; il judge (3.4) usa l'interfaccia `get_llm(role="judge")`.
 
 - [ ] **3.1 Rubric Type 4 corretta** (`evaluation/evaluate.py::_score_rubric`)
   - Oggi un item passa se compare *una qualsiasi parola* della frase (anche "for", "both") → T4 sempre 100%.
@@ -115,8 +154,9 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
   - Type 1: verificare i *valori chiave* (nuovo campo `expected_values: [...]` in `ground_truth.json`) invece dell'intera stringa.
   - Type 2: lista di valori attesi per ogni ETF.
 
-- [ ] **3.4 LLM-as-judge** — completare `evaluate_faithfulness_llm` usando `src/llm.py`; flag `--judge llm|heuristic`.
-  - Judge configurabile separatamente (`JUDGE_PROVIDER`, `JUDGE_MODEL`, `JUDGE_API_KEY`): idealmente **un modello diverso da quello che genera** (es. genera con Groq, giudica con Gemini), temperature 0, output JSON validato.
+- [ ] **3.4 LLM-as-judge** — completare `evaluate_faithfulness_llm` usando `get_llm(role="judge")`; flag `--judge llm|heuristic`.
+  - Judge configurabile separatamente (`JUDGE_PROVIDER`, `JUDGE_MODEL`, 2.4): **un modello diverso da quello che genera** — default Claude Sonnet 5.5 che giudica le risposte di Haiku 4.5. Temperature 0, output JSON validato (con il backend Anthropic usare gli output strutturati per avere lo schema garantito).
+  - Il costo del judge rientra nel conteggio e nel budget della run (2.5).
   - Done quando: il judge restituisce per ogni domanda verdetto + motivazione salvati nel report.
 
 - [ ] **3.5 Creare `evaluation/run_retrieval.py`** (citato nel README ma inesistente): solo retrieval sulla ground truth, output compatibile con `evaluate.py --retrieval_only`. Nessun LLM richiesto.
@@ -124,7 +164,8 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 - [ ] **3.6 Report comparabili** — salvare nel report `provider`, `model`, `judge_model`, `chunk_size`, `embedding_model`, timestamp; salvare ogni run in `evaluation/runs/<timestamp>_<model>.json`; flag `--compare <report.json>` che stampa i delta.
 
 - [ ] **3.7 Baseline ufficiale**
-  - Rieseguire pipeline + valutazione (judge attivo) con il provider principale e almeno un secondo modello.
+  - Rieseguire pipeline + valutazione (judge attivo) con il provider principale (Claude Haiku 4.5). Opzionale, se il credito lo consente o con una chiave gratuita: un secondo modello/provider per confronto.
+  - Facoltativo per risparmiare: usare la Batch API di Anthropic (−50 %) per le run di valutazione, che non richiedono risposte immediate.
   - Salvare come `evaluation/baseline_cloud.json` e riportare le metriche in testa a questo file e in `CLAUDE.md`.
   - Done quando: esiste una baseline di generazione affidabile; tutte le fasi successive si confrontano con questa.
 
@@ -144,6 +185,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
   - `pipeline.py` deve poter valutare anche l'agent.
 
 - [ ] **4.5 Citazioni strutturate** — il modello cita i chunk (`[Chunk 3]`) e il codice li risolve nei metadati reali, invece di fargli scrivere a mano `[ISIN | issuer | doc_type | year]`.
+  - Alternativa da valutare con il backend Anthropic: le **citazioni native** (chunk passati come documenti; la risposta contiene i passaggi citati). Va esposta tramite l'interfaccia neutra in modo opzionale (gli altri provider ricadono sul formato `[Chunk N]`).
   - Done quando (fase 4): metriche ≥ baseline 3.7, attribution in miglioramento.
 
 ---
@@ -154,7 +196,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 - [ ] **5.2 Embedding multilingue** — provare `intfloat/multilingual-e5-small` (prefissi `query:`/`passage:`) o `paraphrase-multilingual-MiniLM-L12-v2`; aggiungere domande in italiano alla ground truth. Salvare il modello di embedding nei metadati della collection (errore se query e indice usano modelli diversi).
 - [ ] **5.3 Retrieval ibrido** — BM25 (`rank_bm25`) + vettoriale fusi con Reciprocal Rank Fusion: aiuta su ISIN, sigle (TER, OCF, SRI) e numeri.
 - [ ] **5.4 Soglia di score** — scartare chunk sotto una similarità minima e segnalarlo al modello.
-- [ ] **5.5 Modalità "full context" di confronto** — l'intero corpus 2026 è ~19k token: modalità che passa i documenti interi al modello, per misurare quanto il RAG aggiunge rispetto al contesto completo (attenzione ai limiti token/min dei free tier).
+- [ ] **5.5 Modalità "full context" di confronto** — l'intero corpus 2026 è ~19k token: modalità che passa i documenti interi al modello, per misurare quanto il RAG aggiunge rispetto al contesto completo (attenzione ai limiti token/min dei free tier). Con Claude usare il **prompt caching** sul corpus: le letture dalla cache costano un decimo dell'input.
 
 ---
 
@@ -176,7 +218,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 
 ## Fase 8 — Ingegneria del progetto
 
-- [ ] **8.1 Dipendenze** — eliminare `requirements.txt` (sostituito da `pyproject.toml` + `uv.lock`); aggiungere come dev-dependency `pytest` e `ruff` (`uv add --dev`); `rank_bm25` quando serve (5.3).
+- [ ] **8.1 Dipendenze** — eliminare `requirements.txt` (sostituito da `pyproject.toml` + `uv.lock`); `anthropic` aggiunto in 2.2; dev-dependency `pytest` e `ruff` (`uv add --dev`); `rank_bm25` quando serve (5.3).
 - [ ] **8.2 Rinominare `setup.py`** in `bootstrap.py` (o `scripts/setup_index.py`): con un `pyproject.toml` presente, `setup.py` è il nome riservato al packaging setuptools e può essere eseguito per errore da `pip install .`.
 - [ ] **8.3 Packaging `src/`** — trasformare `src/` in pacchetto (`fundscope/` con `__init__.py`), eliminare gli import che dipendono dalla cwd, il `sys.path` hack in `setup.py` e il fallback `RetrievedChunk` duplicato in `generate.py`.
 - [ ] **8.4 Logging** — sostituire i `print("[retrieve] …")` con `logging`, livello via `--verbose`; risolve anche il problema `UnicodeEncodeError` su Windows con stdout in pipe.
@@ -184,9 +226,11 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
   - unit: `_build_where`, `parse_citations`, `split_text`, `make_chunk_id`, scorer di `evaluate.py`;
   - ingest di un PDF di esempio → numero e metadati dei chunk;
   - retrieval end-to-end su indice temporaneo (senza LLM);
-  - agent con client LLM **mockato** (sequenza tool call → risposta): nessuna chiamata di rete nei test.
+  - agent con client LLM **mockato** (sequenza tool call → risposta): nessuna chiamata di rete nei test;
+  - conversione dei formati per **entrambi** i backend (neutro ↔ Anthropic, neutro ↔ OpenAI) con risposte registrate/finte, così il cambio di provider resta verificato anche senza chiavi;
+  - calcolo dei costi e interruzione per budget (2.5).
 - [ ] **8.6 CI GitHub Actions** — su push: `uv sync`, `ruff`, test, valutazione retrieval-only; fallire se la recall scende sotto soglia. Nessuna chiave API in CI (la valutazione della generazione resta manuale).
-- [ ] **8.7 README** — riallineare comandi (`uv run python src/...`, `src/metadata.json`, campo `isin` nell'esempio), sezione provider cloud + `.env`, tabella risultati per modello, rimuovere riferimenti a Ollama e a file inesistenti.
+- [ ] **8.7 README** — riallineare il resto del README (la sezione "LLM provider" è già in 2.10): comandi (`uv run python src/...`, `src/metadata.json`, campo `isin` nell'esempio), architettura aggiornata, tabella risultati per modello, eventuali residui di Ollama e riferimenti a file inesistenti.
 
 ---
 
@@ -198,10 +242,11 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 
 ---
 
-## Riferimenti rapidi provider (free tier, settembre 2026 — verificare nella console)
+## Riferimenti rapidi provider (ottobre 2026 — verificare nella console)
 
-| Provider | Base URL OpenAI-compatibile | Limiti indicativi |
+| Provider | Accesso | Limiti / costi indicativi |
 |---|---|---|
+| **Anthropic (default)** | SDK nativo `anthropic` | a consumo: Haiku 4.5 1 $/5 $, Sonnet 5.5 2 $/10 $ per M token (in/out); Batch −50 %, cache read 0,1× |
 | Groq | `https://api.groq.com/openai/v1` | ~1.000 req/giorno, ~30 RPM |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai/` | 20–1.500 req/giorno secondo il modello |
 | OpenRouter | `https://openrouter.ai/api/v1` | 50 req/giorno sui modelli `:free` |

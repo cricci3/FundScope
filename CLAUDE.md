@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TODO.md` (Italian) is the project roadmap: phases 0–9, each task with the files involved and a **"Done quando"** (done when) criterion. Work rules:
 
-- **One phase at a time, in order.** Phases 0–1 are done. Phase 2 migrates generation to a cloud LLM (Ollama has been uninstalled and must not be reintroduced); phase 3 fixes the evaluation and sets the official baseline. Don't judge model quality before phase 3 is closed. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
+- **One phase at a time, in order.** Phases 0–1 are done. Phase 2 migrates generation to Claude via the Anthropic API behind a provider-neutral interface (Ollama has been uninstalled and must not be reintroduced); phase 3 fixes the evaluation and sets the official baseline. Don't judge model quality before phase 3 is closed. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
 - Tick tasks `[x]` in `TODO.md` as they are completed.
 - **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation (commands below) and compare the report with the current reference (retrieval-only after phase 1; `evaluation/baseline_cloud.json` once task 3.7 is done). Report the metric deltas before moving on.
-- Roadmap work happens on branch `refactor/cloud-llm` (task 0.1), not `main`.
+- **Work only on `main` — never create branches.** Commit after each completed task, with a message that starts with the task number (e.g. `2.3: OpenAI-compatible backend`); push to `origin/main` at the end of each phase.
+- **The LLM provider is Claude via the Anthropic API, with limited prepaid credit (~5 $).** Never hard-code a provider or model outside `src/llm/` and `config.py`. During development run the pipeline/evaluation on subsets (`--limit`, `--qids`); run the full 17-question evaluation only at the end of a phase, and always report the cost of each run.
 
 Current reference: retrieval-only precision 0.988 · recall 1.000 (after phase 1). `evaluation/baseline_llama3.2-3b.json` is historical only (dirty index + buggy scorer) and is not comparable. The official generation baseline is set in task 3.7.
 
