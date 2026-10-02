@@ -1,49 +1,66 @@
 {
+  "pipeline_run": {
+    "provider": "anthropic",
+    "model": "claude-haiku-4-5",
+    "started_at": "2026-10-02T13:25:12+00:00",
+    "finished_at": "2026-10-02T13:25:48+00:00",
+    "status": "complete",
+    "n_questions": 17,
+    "totals": {
+      "input_tokens": 14623,
+      "output_tokens": 2606,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "cost_usd": 0.027653,
+      "unpriced_questions": 0
+    },
+    "budget_usd": 0.5
+  },
   "summary": {
     "overall": {
       "n": 17,
-      "retrieval_precision_mean": 0.502,
-      "retrieval_recall_mean": 0.956,
+      "retrieval_precision_mean": 0.988,
+      "retrieval_recall_mean": 1.0,
       "any_relevant_pct": 1.0,
-      "attribution_score_mean": 0.382,
+      "attribution_score_mean": 0.794,
       "faithfulness_pass_pct": 0.267,
-      "unsupported_claims_pct": 0.588
+      "unsupported_claims_pct": 0.294
     },
     "by_query_type": {
       "type_1": {
         "n": 7,
-        "retrieval_precision_mean": 0.457,
+        "retrieval_precision_mean": 0.971,
         "retrieval_recall_mean": 1.0,
-        "attribution_score_mean": 0.286
+        "attribution_score_mean": 1.0
       },
       "type_2": {
         "n": 8,
-        "retrieval_precision_mean": 0.563,
+        "retrieval_precision_mean": 1.0,
         "retrieval_recall_mean": 1.0,
-        "attribution_score_mean": 0.5
+        "attribution_score_mean": 0.688
       },
       "type_4": {
         "n": 2,
-        "retrieval_precision_mean": 0.416,
-        "retrieval_recall_mean": 0.625,
-        "attribution_score_mean": 0.25
+        "retrieval_precision_mean": 1.0,
+        "retrieval_recall_mean": 1.0,
+        "attribution_score_mean": 0.5
       }
     },
     "by_difficulty": {
       "easy": {
         "n": 4,
-        "retrieval_precision_mean": 0.517,
+        "retrieval_precision_mean": 0.95,
         "retrieval_recall_mean": 1.0
       },
       "medium": {
         "n": 7,
-        "retrieval_precision_mean": 0.51,
+        "retrieval_precision_mean": 1.0,
         "retrieval_recall_mean": 1.0
       },
       "hard": {
         "n": 6,
-        "retrieval_precision_mean": 0.483,
-        "retrieval_recall_mean": 0.875
+        "retrieval_precision_mean": 1.0,
+        "retrieval_recall_mean": 1.0
       }
     }
   },
@@ -56,7 +73,7 @@
       "retrieval": {
         "qid": "T1_001",
         "query_type": 1,
-        "precision_at_k": 0.4,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -71,7 +88,7 @@
         "qid": "T1_001",
         "query_type": 1,
         "correct_sources_cited": true,
-        "wrong_sources_cited": true,
+        "wrong_sources_cited": false,
         "attribution_score": 1.0
       }
     },
@@ -83,7 +100,7 @@
       "retrieval": {
         "qid": "T1_002",
         "query_type": 1,
-        "precision_at_k": 0.6,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -97,9 +114,9 @@
       "attribution": {
         "qid": "T1_002",
         "query_type": 1,
-        "correct_sources_cited": false,
+        "correct_sources_cited": true,
         "wrong_sources_cited": false,
-        "attribution_score": 0.0
+        "attribution_score": 1.0
       }
     },
     {
@@ -110,7 +127,7 @@
       "retrieval": {
         "qid": "T1_003",
         "query_type": 1,
-        "precision_at_k": 0.4,
+        "precision_at_k": 0.8,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -124,9 +141,9 @@
       "attribution": {
         "qid": "T1_003",
         "query_type": 1,
-        "correct_sources_cited": false,
-        "wrong_sources_cited": true,
-        "attribution_score": 0.0
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
       }
     },
     {
@@ -137,7 +154,7 @@
       "retrieval": {
         "qid": "T1_004",
         "query_type": 1,
-        "precision_at_k": 0.4,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -151,9 +168,9 @@
       "attribution": {
         "qid": "T1_004",
         "query_type": 1,
-        "correct_sources_cited": false,
-        "wrong_sources_cited": true,
-        "attribution_score": 0.0
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
       }
     },
     {
@@ -164,7 +181,7 @@
       "retrieval": {
         "qid": "T1_005",
         "query_type": 1,
-        "precision_at_k": 0.6,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -173,13 +190,13 @@
         "query_type": 1,
         "answer_contains_expected": true,
         "rubric_scores": null,
-        "has_unsupported_claims": true
+        "has_unsupported_claims": false
       },
       "attribution": {
         "qid": "T1_005",
         "query_type": 1,
         "correct_sources_cited": true,
-        "wrong_sources_cited": true,
+        "wrong_sources_cited": false,
         "attribution_score": 1.0
       }
     },
@@ -191,7 +208,7 @@
       "retrieval": {
         "qid": "T1_006",
         "query_type": 1,
-        "precision_at_k": 0.4,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -205,9 +222,9 @@
       "attribution": {
         "qid": "T1_006",
         "query_type": 1,
-        "correct_sources_cited": false,
+        "correct_sources_cited": true,
         "wrong_sources_cited": false,
-        "attribution_score": 0.0
+        "attribution_score": 1.0
       }
     },
     {
@@ -218,7 +235,7 @@
       "retrieval": {
         "qid": "T1_007",
         "query_type": 1,
-        "precision_at_k": 0.4,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -232,9 +249,9 @@
       "attribution": {
         "qid": "T1_007",
         "query_type": 1,
-        "correct_sources_cited": false,
-        "wrong_sources_cited": true,
-        "attribution_score": 0.0
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
       }
     },
     {
@@ -245,7 +262,7 @@
       "retrieval": {
         "qid": "T2_001",
         "query_type": 2,
-        "precision_at_k": 0.667,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -254,7 +271,7 @@
         "query_type": 2,
         "answer_contains_expected": false,
         "rubric_scores": null,
-        "has_unsupported_claims": true
+        "has_unsupported_claims": false
       },
       "attribution": {
         "qid": "T2_001",
@@ -272,7 +289,7 @@
       "retrieval": {
         "qid": "T2_002",
         "query_type": 2,
-        "precision_at_k": 0.667,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -286,9 +303,9 @@
       "attribution": {
         "qid": "T2_002",
         "query_type": 2,
-        "correct_sources_cited": true,
-        "wrong_sources_cited": true,
-        "attribution_score": 1.0
+        "correct_sources_cited": false,
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
       }
     },
     {
@@ -299,7 +316,7 @@
       "retrieval": {
         "qid": "T2_003",
         "query_type": 2,
-        "precision_at_k": 0.5,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -308,14 +325,14 @@
         "query_type": 2,
         "answer_contains_expected": false,
         "rubric_scores": null,
-        "has_unsupported_claims": true
+        "has_unsupported_claims": false
       },
       "attribution": {
         "qid": "T2_003",
         "query_type": 2,
-        "correct_sources_cited": true,
-        "wrong_sources_cited": true,
-        "attribution_score": 1.0
+        "correct_sources_cited": false,
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
       }
     },
     {
@@ -326,7 +343,7 @@
       "retrieval": {
         "qid": "T2_004",
         "query_type": 2,
-        "precision_at_k": 0.5,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -340,9 +357,9 @@
       "attribution": {
         "qid": "T2_004",
         "query_type": 2,
-        "correct_sources_cited": false,
+        "correct_sources_cited": true,
         "wrong_sources_cited": false,
-        "attribution_score": 0.0
+        "attribution_score": 1.0
       }
     },
     {
@@ -353,7 +370,7 @@
       "retrieval": {
         "qid": "T2_006",
         "query_type": 2,
-        "precision_at_k": 0.5,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -362,13 +379,13 @@
         "query_type": 2,
         "answer_contains_expected": false,
         "rubric_scores": null,
-        "has_unsupported_claims": true
+        "has_unsupported_claims": false
       },
       "attribution": {
         "qid": "T2_006",
         "query_type": 2,
         "correct_sources_cited": true,
-        "wrong_sources_cited": true,
+        "wrong_sources_cited": false,
         "attribution_score": 1.0
       }
     },
@@ -380,7 +397,7 @@
       "retrieval": {
         "qid": "T2_007",
         "query_type": 2,
-        "precision_at_k": 0.5,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -395,7 +412,7 @@
         "qid": "T2_007",
         "query_type": 2,
         "correct_sources_cited": false,
-        "wrong_sources_cited": true,
+        "wrong_sources_cited": false,
         "attribution_score": 0.0
       }
     },
@@ -407,7 +424,7 @@
       "retrieval": {
         "qid": "T2_008",
         "query_type": 2,
-        "precision_at_k": 0.5,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -416,14 +433,14 @@
         "query_type": 2,
         "answer_contains_expected": false,
         "rubric_scores": null,
-        "has_unsupported_claims": true
+        "has_unsupported_claims": false
       },
       "attribution": {
         "qid": "T2_008",
         "query_type": 2,
-        "correct_sources_cited": false,
-        "wrong_sources_cited": true,
-        "attribution_score": 0.0
+        "correct_sources_cited": true,
+        "wrong_sources_cited": false,
+        "attribution_score": 1.0
       }
     },
     {
@@ -434,7 +451,7 @@
       "retrieval": {
         "qid": "T2_009",
         "query_type": 2,
-        "precision_at_k": 0.667,
+        "precision_at_k": 1.0,
         "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
@@ -450,7 +467,7 @@
         "query_type": 2,
         "correct_sources_cited": false,
         "wrong_sources_cited": false,
-        "attribution_score": 0.0
+        "attribution_score": 0.5
       }
     },
     {
@@ -461,8 +478,8 @@
       "retrieval": {
         "qid": "T4_001",
         "query_type": 4,
-        "precision_at_k": 0.333,
-        "recall_at_k": 0.5,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
       "faithfulness": {
@@ -498,8 +515,8 @@
         "qid": "T4_001",
         "query_type": 4,
         "correct_sources_cited": false,
-        "wrong_sources_cited": true,
-        "attribution_score": 0.25
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
       }
     },
     {
@@ -510,8 +527,8 @@
       "retrieval": {
         "qid": "T4_002",
         "query_type": 4,
-        "precision_at_k": 0.5,
-        "recall_at_k": 0.75,
+        "precision_at_k": 1.0,
+        "recall_at_k": 1.0,
         "any_relevant_retrieved": true
       },
       "faithfulness": {
@@ -528,7 +545,7 @@
           "should_mention": {
             "domicile of each fund": true,
             "distribution policy (acc/dist)": false,
-            "AUM difference": true
+            "AUM difference": false
           },
           "must_not_contain": {
             "hallucinated figures": true,
@@ -536,7 +553,7 @@
           },
           "summary": {
             "must_mention_score": 1.0,
-            "should_mention_score": 0.67,
+            "should_mention_score": 0.33,
             "must_not_violated": true,
             "overall_pass": true
           }
@@ -547,8 +564,8 @@
         "qid": "T4_002",
         "query_type": 4,
         "correct_sources_cited": false,
-        "wrong_sources_cited": true,
-        "attribution_score": 0.25
+        "wrong_sources_cited": false,
+        "attribution_score": 0.5
       }
     }
   ]
