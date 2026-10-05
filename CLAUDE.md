@@ -6,13 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TODO.md` (Italian) is the project roadmap: phases 0–9, each task with the files involved and a **"Done quando"** (done when) criterion. Work rules:
 
-- **One phase at a time, in order.** Phases 0–3 are done (phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `src/llm/` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline). Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
+- **One phase at a time, in order.** Phases 1–4 are done; phase 0 only lacks task 0.3 (delete the remote branch `origin/refactor/cloud-llm`, needs the user's confirmation). Phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `src/llm/` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline; phase 4 made the tool-calling agent the only entrypoint. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
 - Tick tasks `[x]` in `TODO.md` as they are completed.
 - **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation with the judge (`--judge llm --compare evaluation/baseline_cloud.json`) and report the metric deltas against the baseline before moving on.
 - **Work only on `main` — never create branches.** Commit after each completed task, with a message that starts with the task number (e.g. `2.3: OpenAI-compatible backend`); push to `origin/main` at the end of each phase.
 - **The LLM provider is Claude via the Anthropic API, with limited prepaid credit (~5 $).** Never hard-code a provider or model outside `src/llm/` and `config.py`. During development run the pipeline/evaluation on subsets (`--limit`, `--qids`); run the full 17-question evaluation only at the end of a phase, and always report the cost of each run.
 
 Current reference: **`evaluation/baseline_cloud.json`** (task 3.7; Haiku 4.5 generator, Sonnet 5.5 judge, 17 questions): judge verdict pass 0.353 · judge correctness 0.467 · grounded 0.824 · abstained 0.353 · attribution 0.882 · retrieval precision 0.988 / recall 1.000 (document-level). Cost of a full run + judge ≈ 0.12 $. Most failures are abstentions: the right document is retrieved but not the chunk holding the value. `evaluation/baseline_llama3.2-3b.json` is historical only and not comparable.
+
+Latest result (phase 4, agent engine — `evaluation/report_phase4_agent.json`): judge pass 0.706 · correctness 0.833 · grounded 0.765 · abstained 0.059 · attribution 0.824 · retrieval precision 0.851 / recall 0.941. A full agent run + judge costs ≈ 0.34 $ (agent ≈ 0.012 $/question), so keep development runs on `--qids` subsets.
 
 ## Commands
 
@@ -78,5 +80,5 @@ RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `all-Mi
 
 ### Known pitfalls
 
-- On this machine Git Bash heredocs corrupt non-ASCII characters (`—`, `→`, `─` are common in this repo): write multi-line patches/scripts with the file Write/Edit tools, not `cat <<EOF`.
+- On this machine Git Bash heredocs corrupt non-ASCII characters (`—`, `→`, `─` are common in this repo): write multi-line patches/scripts with the file Write/Edit tools, not `cat <<EOF`. This also applies to `python - <<'EOF'` patch scripts: search strings with non-ASCII characters or `\\` escapes silently fail to match.
 - Adding an ETF only needs `metadata.json` entries (with `name` and `yahoo_ticker`); `registry.py` raises if documents of the same ISIN disagree on a fund-level field.

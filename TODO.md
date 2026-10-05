@@ -42,18 +42,17 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ## Stato attuale (aggiornato 2026-10-05)
 
-- **Branch:** si lavora solo su `main`. Fase 4 accettata (05/10/2026) e pushata su `origin/main`. Branch locale `refactor/cloud-llm` cancellato; resta solo la copia su GitHub (`origin/refactor/cloud-llm`) → task 0.3 aperto finché non si conferma `git push origin --delete refactor/cloud-llm`.
-- **Test/lint:** nessuna suite né ruff (previsti in fase 8). Le verifiche di fase 4 (risoluzione `[Chunk N]`, memoria con LLM finto, argomenti del tool di ricerca, preambolo) sono state fatte con script temporanei non salvati nel repo.
-- **Fatto nell'ultima sessione:** fase 4 (4.1–4.5): `src/registry.py`, `src/citations.py`, agent come unico entrypoint (`ask.py` = alias), memoria conversazionale, `pipeline.py --engine agent|rag`. Judge pass 35% → 71%. Credito Anthropic speso finora ≈ 1,16 $ (questa sessione ≈ 0,97 $, di cui due run complete agent + judge ≈ 0,67 $).
+- **Branch:** solo `main`, allineato e pushato su `origin/main` (`d66e573`, fase 4 chiusa). Branch locale `refactor/cloud-llm` cancellato; resta `origin/refactor/cloud-llm` su GitHub → task 0.3 aperto (cancellazione remota da confermare con l'utente).
+- **Test/lint:** nessuna suite né ruff (`uv run pytest` / `uv run ruff` → "program not found"; previsti in fase 8). Le verifiche della fase 4 (risoluzione `[Chunk N]`, memoria con LLM finto, argomenti di `search_etf_docs`, rimozione del preambolo) sono state fatte con script temporanei non salvati.
+- **Fatto nell'ultima sessione:** fase 4 completa e verificata con run completa + judge (esito e tabella sotto la fase 4): judge pass 35% → 71%, astensioni 35% → 6%. Credito Anthropic speso finora ≈ 1,16 $.
 - **Problemi aperti / scoperti:**
-  - Retrieval: valori nel layout a colonne del factsheet spezzati/mescolati ("Product Structure : Physical" iShares) → T1_006/T2_007 falliscono anche con più ricerche. Fase 5 (chunk più grandi, ibrido) e/o ingest.
-  - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (l'agent lo ha chiamato in T2_008): task 6.1. `EUNL.DE` funziona (`get_live_data` verificato con dati reali).
-  - L'agent costa ~0,012 $/domanda (3,2 chiamate, prompt che cresce a ogni ricerca; nessun cache hit perché Haiku 4.5 richiede prefissi ≥ 4096 token). Possibile ottimizzazione: breakpoint di cache sull'ultimo messaggio, oppure meno chunk per ricerca.
-  - Haiku a volte aggiunge esempi numerici inventati (T4_001) nonostante la regola nel system prompt.
-  - Judge non deterministico (±1 domanda tra run). Backend OpenAI-compatibile mai provato con una chiave vera.
-- **Decisioni recenti:** `pipeline.py` valuta di default l'agent (`--engine agent`), che riceve solo la domanda; la pipeline fissa resta come `--engine rag`. Il judge riceve il registro fondi dato all'agent (`reference_data`) e lo conta come contesto. Le citazioni sono `[Chunk N]` risolte dal codice (citazioni native Anthropic non adottate). `baseline_cloud.json` resta la baseline ufficiale finché non si decide di promuovere `report_phase4_agent.json`.
-- **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato/citato contiene il valore atteso?). L'output della pipeline ora salva `cited_chunk_ids`, utile per calcolarla.
-- **Prossimo passo:** 1) chiudere 0.3 cancellando il branch remoto (da confermare); 2) fase 5, partendo dal retrieval a livello di chunk.
+  - Retrieval: nel factsheet iShares "Product Structure : Physical" è spezzato dal layout a colonne e non viene trovato → T1_006 e T2_007 falliscono anche dopo 4–6 ricerche (fase 5 e/o ingest).
+  - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (task 6.1); `EUNL.DE` funziona con dati reali.
+  - Agent ≈ 0,012 $/domanda (3,2 chiamate in media, prompt che cresce a ogni ricerca, nessun cache hit perché Haiku 4.5 richiede prefissi ≥ 4096 token): da valutare un breakpoint di cache sull'ultimo messaggio o meno chunk per ricerca.
+  - Haiku a volte inventa esempi numerici (T4_001, "€100.000 in 20 anni") nonostante la regola nel system prompt. Judge non deterministico (±1 domanda tra run).
+- **Decisioni recenti:** `pipeline.py` valuta di default l'agent, che riceve solo la domanda (la pipeline fissa resta come `--engine rag`, per confronto); il judge riceve il registro fondi dato all'agent (`reference_data`), perché fa parte del contesto dell'agent; `baseline_cloud.json` resta la baseline ufficiale (la promozione di `report_phase4_agent.json` non è stata decisa).
+- **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato/citato contiene il valore atteso?); l'output della pipeline salva già `cited_chunk_ids`.
+- **Prossimo passo:** 1) fase 5: ispezionare i chunk del factsheet iShares (`data/processed/IE00B4L5Y983_2026_Q4_factsheet.json`) e provare 5.1 (chunk più grandi) misurando con `evaluation/run_retrieval.py` (gratis) e `--qids T1_006 T2_007`; 2) chiedere all'utente se cancellare `origin/refactor/cloud-llm` (chiude 0.3).
 
 ---
 
