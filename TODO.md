@@ -215,7 +215,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 
 - [x] **4.1 Tool `search_etf_docs` più espressivo** — parametri `isins: list[str]`, `mode: single|comparative|cross_doc`, `year`; enum di issuer/ISIN generati dal registro (4.3), non hard-coded.
 
-- [ ] **4.2 Memoria conversazionale** — history mantenuta tra domande in modalità interattiva (comando `reset`), troncata a N turni.
+- [x] **4.2 Memoria conversazionale** — history mantenuta tra domande in modalità interattiva (comando `reset`), troncata a N turni.
 
 - [x] **4.3 Registro fondi unico** — `src/registry.py` che costruisce `KNOWN_ISINS` (nome, issuer, ticker Yahoo) da `metadata.json`; eliminare le copie in `ask.py`, `agent.py`, `live_data.py` (`ISIN_TO_NAME`, `ISIN_TO_TICKER`). Aggiungere il campo `yahoo_ticker` in `metadata.json`.
 

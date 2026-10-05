@@ -55,6 +55,7 @@ from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, g
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 MAX_ITERATIONS  = 6              # safety cap on the agent loop
+HISTORY_TURNS   = 5              # past question/answer pairs kept in interactive mode
 MAX_TOKENS      = 1024
 K_SINGLE        = 6              # chunks for a single-fund search
 K_PER_ETF       = 3              # chunks per fund in comparative mode
@@ -339,13 +340,19 @@ class Agent:
     """
     The core agent loop.
 
-    Each call to .run() starts a fresh conversation. The loop:
+    Each call to .run() answers one question. The loop:
       1. Sends the user message + tool definitions to the LLM
       2. If the LLM returns tool calls → execute them, append results, loop
       3. If the LLM returns a text message → that is the final answer
       4. Hard stop after MAX_ITERATIONS to prevent runaway loops
     The [Chunk N] citations of the final answer are then resolved to the
     metadata of the chunks the tools returned (citations.py).
+
+    Conversational memory: the last `history_turns` question/answer pairs are
+    sent before the new question, so follow-ups ("and the UBS one?") work.
+    Only the final answers are kept (not the tool calls and chunks), which keeps
+    the prompt small; reset() forgets everything. history_turns=0 makes every
+    question independent (used by the evaluation).
     """
 
     def __init__(
@@ -355,11 +362,14 @@ class Agent:
         model: str = None,
         show_calls: bool = False,
         llm: LLMClient = None,
+        history_turns: int = HISTORY_TURNS,
     ):
         self._llm      = llm or get_llm("generator", provider, model)
         self._executor = ToolExecutor(retriever)
         self._system   = build_system_prompt()
         self._show_calls = show_calls
+        self._history_turns = history_turns
+        self._history: list[tuple[str, str]] = []     # (question, resolved answer)
         print(f"[agent] Provider: {self._llm.provider}  |  Model: {self._llm.model}")
 
     @property
@@ -370,14 +380,28 @@ class Agent:
     def model(self) -> str:
         return self._llm.model
 
+    @property
+    def history_len(self) -> int:
+        return len(self._history)
+
+    def reset(self) -> None:
+        """Forget the conversation so far."""
+        self._history.clear()
+
+    def _history_messages(self) -> list[Message]:
+        messages = []
+        for question, answer in self._history:
+            messages += [Message("user", question), Message("assistant", answer)]
+        return messages
+
     def run(self, question: str) -> AgentResult:
-        """Run the agent loop for a single question."""
+        """Run the agent loop for a single question (after the remembered turns)."""
         self._executor.new_question()
         result   = AgentResult(question=question, answer="",
                                provider=self._llm.provider, model=self._llm.model)
         priced   = True
         cost     = 0.0
-        messages = [Message("user", question)]
+        messages = self._history_messages() + [Message("user", question)]
         text     = ""
 
         for iteration in range(MAX_ITERATIONS):
@@ -441,6 +465,10 @@ class Agent:
         result.cited_sources = resolved.cited_sources
         result.cited_chunks  = resolved.cited_chunks
         result.cost_usd      = round(cost, 6) if priced else None
+
+        if self._history_turns > 0 and result.stop_reason == "answer":
+            self._history.append((question, result.answer))
+            del self._history[:-self._history_turns]
         return result
 
 
@@ -497,6 +525,7 @@ HELP_TEXT = """
     <any question>   Ask anything about the ETFs
     funds            List ETFs in the corpus
     calls            Toggle showing tool calls (default: off)
+    reset            Forget the conversation (follow-up questions use the last {turns} turns)
     help             Show this message
     exit / quit      Exit
 """
@@ -525,10 +554,13 @@ def interactive_loop(agent: Agent, show_cost: bool = False) -> None:
             print("  Goodbye.")
             break
         elif cmd == "help":
-            print(HELP_TEXT)
+            print(HELP_TEXT.format(turns=HISTORY_TURNS))
         elif cmd == "funds":
             funds = "\n".join(f"  • {f.describe()}" for f in FUNDS.values())
             print(f"\n  ETFs in corpus:\n{funds}\n")
+        elif cmd == "reset":
+            agent.reset()
+            print("  Conversation cleared.")
         elif cmd == "calls":
             agent._show_calls = not agent._show_calls
             print(f"  Show tool calls: {'on' if agent._show_calls else 'off'}")

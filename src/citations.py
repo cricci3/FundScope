@@ -134,7 +134,7 @@ def resolve_citations(answer: str, book: ChunkBook) -> ResolvedAnswer:
 
     text = CHUNK_TAG_RE.sub(_replace, answer)
     text = re.sub(r"[ \t]+([.,;:)])", r"\1", text)      # " ." left by a dropped tag
-    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = re.sub(r"[ \t]{2,}", " ", text).strip()
 
     return ResolvedAnswer(
         text=text,
