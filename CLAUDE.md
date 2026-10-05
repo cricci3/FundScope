@@ -37,18 +37,19 @@ python src/embed.py --input_dir data/processed/ --db_path index/chroma_db/ [--re
 python src/retrieve.py --query "..." --etf_isin IE00B4L5Y983 --doc_type factsheet [--mode comparative --isin_list A B] [--json]
 
 # Entrypoints
-python src/ask.py [--query "..."] [--show_chunks] [--show_cost] [--provider ...] [--model ...]   # keyword-routed RAG
-python src/agent.py [--query "..."] [--show_calls] [--show_cost] [--provider ...] [--model ...]  # tool-calling agent
+python src/agent.py [--query "..."] [--show_calls] [--show_chunks] [--show_cost] [--provider ...] [--model ...]  # tool-calling agent (the entrypoint)
+python src/ask.py ...                                                # alias of agent.py, same flags
+python src/registry.py                                               # print the fund registry
 python src/live_data.py --isin IE00B4L5Y983                         # yfinance market data
 
-# Evaluation (17 ground-truth questions). Output defaults to evaluation/runs/<UTC ts>_<model>.json
+# Evaluation (17 ground-truth questions). Output defaults to evaluation/runs/<UTC ts>_<model>[_agent].json
 # During development use --limit N / --qids ...; run all 17 only at the end of a phase and report the cost.
-python src/pipeline.py --run_eval [--limit 3] [--qids T1_001 T2_003] [--output ...]
+python src/pipeline.py --run_eval [--engine agent|rag] [--limit 3] [--qids T1_001 T2_003] [--output ...]
 python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/runs/<run>.json --report evaluation/report.json [--judge heuristic|llm] [--compare evaluation/baseline_cloud.json] [--retrieval_only] [--limit N] [--qids ...]
 python evaluation/run_retrieval.py [--limit N]          # retrieval only, no LLM; score with --retrieval_only
 ```
 
-Single question through the batch pipeline: `python src/pipeline.py --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
+Single question through the batch pipeline: `python src/pipeline.py --query "..."` (agent); the fixed RAG path takes routing hints: `python src/pipeline.py --engine rag --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
 
 
 ## Architecture
@@ -58,12 +59,13 @@ RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `all-Mi
 - **`src/llm/`** is the only place that imports `anthropic` / `openai`. `chat()` also takes `response_schema` (structured JSON output) and `effort` (ignored where unsupported; Haiku 4.5 rejects it, Sonnet 5.5 rejects `temperature`). `base.py` has the neutral types (`Message`, `ToolSpec`, `ToolCall`, `Usage`, `LLMResponse`), the `LLMClient` interface (one method, `chat(messages, *, system, tools, temperature, max_tokens)`), and the process-wide `SESSION` cost tracker that enforces `LLM_MAX_COST_USD` (raises `BudgetExceededError`). `get_llm(role="generator"|"judge", provider, model)` in `__init__.py` builds the client. Backends: `anthropic_backend.py` (native SDK; SDK 1.x has no `temperature` kwarg, so it goes via `extra_body` for models that accept it; cache breakpoint on the system block — Haiku 4.5 only caches prefixes ≥ 4096 tokens) and `openai_compat.py` (one-line registry `OPENAI_COMPAT_PROVIDERS`, key from `<NAME>_API_KEY`). Prices in `pricing.py` (unknown model → cost `None`).
 - In agent loops append `response.to_message()` (not a hand-built message): it carries the provider-native content (`raw`) that the backend replays verbatim.
 
-- **`src/metadata.json`** is the document registry: PDF filename → `isin`, `issuer`, `category`, `type` (factsheet|kid), `year`, … `ingest.py` attaches these to every chunk; output files in `data/processed/` are named by `build_output_stem` (e.g. `IE00B4L5Y983_2026_kid.json`).
+- **`src/metadata.json`** is the document registry: PDF filename → `isin`, `name`, `issuer`, `category`, `type` (factsheet|kid), `year`, `yahoo_ticker`, … (`name`/`yahoo_ticker` are fund-level, identical on every document of an ISIN). **`src/registry.py`** groups it by ISIN into `FUNDS` (name, issuer, ticker, doc types, years) — the only source of ISINs/names/tickers for the agent tools and `live_data.py`. `ingest.py` attaches the document fields to every chunk; output files in `data/processed/` are named by `build_output_stem` (e.g. `IE00B4L5Y983_2026_kid.json`).
 - **Chunking** (`ingest.py`): per-doc-type sizes from `config.CHUNK_SIZES` / `CHUNK_OVERLAPS` (factsheet 250 chars, KID 400); tables kept whole; a synthetic "key facts" chunk per document. Chunk ids come from `make_chunk_id`.
 - **Retrieval** (`retrieve.py`): `Retriever` has three modes — `single` (metadata-filtered search), `comparative` (top-k per ISIN, then merged, so one ETF can't dominate), `cross_document` (top-k per doc_type for one ISIN). `route_query` dispatches between them. Filters are built by `_build_where`.
 - **Query types** (used by `ground_truth.json`, `generate.py` prompts and `pipeline.py`): 1 factual, 2 comparative/cross-doc, 3 temporal (parked — `_parked_type3`, needs multi-year data), 4 synthetic reasoning.
-- **Generation** (`generate.py`): per-type prompt templates, `build_context`, and citation parsing; answers cite sources as `[ISIN | issuer | doc_type | year]`.
-- **Two entrypoints**: `ask.py` detects query type/ISINs with keyword rules and a hard-coded `KNOWN_ISINS`; `agent.py` lets the LLM choose tools (`search_etf_docs`, `get_live_data`, `list_available_etfs`). The roadmap (phase 4) makes the agent the only entrypoint.
+- **Citations** (`citations.py`): chunks shown to the model are numbered (`ChunkBook`, header `[Chunk N] ISIN | issuer | doc_type | year | section`); the model cites `[Chunk N]` and `resolve_citations` rewrites each tag as `[ISIN | issuer | doc_type | year]` from the chunk's real metadata (the format `evaluate.py`/judge read) and returns `cited_sources` + cited chunk numbers. Used by both engines.
+- **Generation** (`generate.py`, `--engine rag` only): per-type prompt templates and `build_context`.
+- **Agent** (`agent.py`, the entrypoint; `ask.py` is a 1-line alias): the LLM chooses tools — `search_etf_docs` (`isins`, `issuer`, `doc_type`, `year`, `mode` single|comparative|cross_doc; enums generated from the registry), `get_live_data`, `list_available_etfs`. `Agent.run()` returns an `AgentResult` (resolved answer, numbered chunks, cited sources, tool calls, usage/cost). Interactive mode keeps the last `HISTORY_TURNS` question/answer pairs (`reset` clears); `pipeline.py --engine agent` (default) uses `history_turns=0` and gives the agent only the question text, while `--engine rag` routes retrieval with the ground-truth hints.
 - **Evaluation** (`evaluation/evaluate.py`): retrieval precision/recall (document-level: a chunk counts if its isin+doc_type+year match a source), attribution, and heuristics driven by `ground_truth.json` — `expected_values` (Type 1: list; Type 2: dict label → values, ISIN labels are checked in the part of the answer about that ETF; values are strings or lists of alternatives, numbers compared numerically), Type 4 rubric items `{item, keywords, min_match}`, unsupported numbers, abstention. Sentences that say information is missing are dropped before matching. `--judge llm` adds `evaluation/judge.py`: one call per question to `get_llm("judge")` (Sonnet 5.5, `JUDGE_EFFORT`), JSON enforced via `response_schema` and re-validated → correctness / grounded / rubric / verdict / reasoning in the report. The judge is the primary quality metric; heuristics are a free fallback. Reports carry `meta` (models, judge, chunk sizes, embedding model) and `--compare` prints deltas.
 
 ### Paths, ids and dedup
@@ -77,4 +79,4 @@ RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `all-Mi
 ### Known pitfalls
 
 - On this machine Git Bash heredocs corrupt non-ASCII characters (`—`, `→`, `─` are common in this repo): write multi-line patches/scripts with the file Write/Edit tools, not `cat <<EOF`.
-- ISIN/name/ticker maps are duplicated in `ask.py`, `agent.py` and `live_data.py`; adding an ETF means updating `metadata.json` plus these copies (until `src/registry.py`, TODO 4.3).
+- Adding an ETF only needs `metadata.json` entries (with `name` and `yahoo_ticker`); `registry.py` raises if documents of the same ISIN disagree on a fund-level field.

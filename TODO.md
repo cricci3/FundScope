@@ -219,7 +219,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 
 - [x] **4.3 Registro fondi unico** — `src/registry.py` che costruisce `KNOWN_ISINS` (nome, issuer, ticker Yahoo) da `metadata.json`; eliminare le copie in `ask.py`, `agent.py`, `live_data.py` (`ISIN_TO_NAME`, `ISIN_TO_TICKER`). Aggiungere il campo `yahoo_ticker` in `metadata.json`.
 
-- [ ] **4.4 Deprecare il router a keyword di `ask.py`**
+- [x] **4.4 Deprecare il router a keyword di `ask.py`**
   - `ask.py` diventa un wrapper sottile sopra `Agent` (o viene rimosso), mantenendo i comandi `funds`, `chunks`, `help`, `exit`.
   - In alternativa, per un percorso non agentico: router via LLM con output strutturato (JSON: isins, doc_types, mode, query_type) al posto delle keyword (oggi `"less"` matcha `"unless"` e `cross_doc` non scatta mai perché `doc_type` è sempre impostato).
   - `pipeline.py` deve poter valutare anche l'agent.

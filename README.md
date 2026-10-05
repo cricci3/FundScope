@@ -38,11 +38,12 @@ PDF files (factsheets + KIDs)
   src/retrieve.py        Semantic search + metadata filtering
         │
         ▼
-  src/generate.py        Prompt construction + LLM call (through src/llm/)
-        │
-        ▼
-  src/ask.py             Interactive user interface
+  src/agent.py           Tool-calling agent: the LLM (through src/llm/) decides what to
+                         search; answers cite [Chunk N], resolved to real metadata
+                         (src/ask.py is an alias)
 ```
+
+`src/generate.py` is the older fixed pipeline (retrieval routed by hand + one LLM call), still available for comparison as `pipeline.py --engine rag`.
 
 Embeddings and retrieval run locally; only answer generation calls the LLM provider.
 
@@ -54,8 +55,9 @@ Embeddings and retrieval run locally; only answer generation calls the LLM provi
 FundScope/
 │
 ├── src/
-│   ├── ask.py                    # Interactive entrypoint — start here
-│   ├── agent.py                  # Tool-calling agent (docs search + live market data)
+│   ├── agent.py                  # Entrypoint — tool-calling agent (docs search + live market data)
+│   ├── ask.py                    # Alias of agent.py
+│   ├── citations.py              # [Chunk N] citations → real source metadata
 │   ├── config.py                 # Paths + LLM settings (reads .env)
 │   ├── metadata.json             # Document registry (ISIN, name, issuer, year, doc type, Yahoo ticker)
 │   ├── registry.py               # Fund registry built from metadata.json (ISIN → name, issuer, ticker)
@@ -264,12 +266,13 @@ You can use retrieval-only evaluation without a model — see the Evaluation sec
 python src/ask.py
 ```
 
-This opens a prompt where you type questions in plain English. The system automatically detects the query type and retrieval mode.
+This opens a prompt where you type questions in plain English (`ask.py` and `agent.py` are the same program). The LLM agent decides which funds, documents and retrieval mode to search, searches again with other wording if the first results miss the answer, and cites the chunks it used; the code turns each `[Chunk N]` citation into the real source metadata. Follow-up questions work: the last 5 questions and answers are remembered until you type `reset`.
 
 ```
 ════════════════════════════════════════════════════════════════
-  FundScope — ETF Research Assistant
-  Type a question, 'funds' to list ETFs, or 'exit' to quit.
+  FundScope Agent — ETF Research Assistant
+  Powered by tool-calling. The LLM decides what to look up.
+  Type a question or 'help' for commands.
 ════════════════════════════════════════════════════════════════
 
   Ask> What is the TER of the iShares MSCI World ETF?
@@ -278,9 +281,9 @@ This opens a prompt where you type questions in plain English. The system automa
   [IE00B4L5Y983 | ishares | factsheet | 2026]
 
   Sources:
-    • iShares Core MSCI World (IE00B4L5Y983) | factsheet | 2026
+    • iShares Core MSCI World UCITS ETF (IE00B4L5Y983) | factsheet | 2026
 
-  Ask> Compare the ongoing charges of both ETFs
+  Ask> And the UBS one?
 
   ...
 
@@ -293,7 +296,9 @@ Available commands inside the prompt:
 |---|---|
 | Any question | Ask about the ETFs in the corpus |
 | `funds` | List all ETFs available in the corpus |
-| `chunks` | Toggle displaying retrieved source chunks |
+| `chunks` | Toggle displaying retrieved source chunks (cited ones are marked) |
+| `calls` | Toggle displaying the agent's tool calls |
+| `reset` | Forget the conversation |
 | `help` | Show available commands |
 | `exit` | Quit |
 
@@ -311,13 +316,13 @@ python src/ask.py --query "Compare the replication methods of both ETFs" --show_
 
 This prints the retrieved chunks before the answer, showing exactly what the model was given — useful for understanding why an answer is correct or incorrect.
 
-### Agent mode (tool calling)
+### Tool calls and live data
 
 ```bash
 python src/agent.py --query "How has the iShares Core MSCI World ETF performed this year?" --show_calls --show_cost
 ```
 
-The model decides which tools to call: document search, live market data (yfinance), or the list of available ETFs.
+The model decides which tools to call: document search (`search_etf_docs`, with optional ISINs, issuer, document type, year and mode — single, comparative or cross-document), live market data (yfinance), or the list of available ETFs. `--show_calls` prints each call.
 
 ### Specifying a different provider or model
 
@@ -356,9 +361,13 @@ python src/ask.py --provider groq --model llama-3.3-70b-versatile
 To measure how well the system retrieves and answers questions against the ground truth set:
 
 ```bash
-# Run the pipeline over all 17 active ground truth questions.
-# Output: evaluation/runs/<UTC timestamp>_<model>.json (never overwritten)
+# Run the agent over all 17 active ground truth questions (it sees only the question text).
+# Output: evaluation/runs/<UTC timestamp>_<model>_agent.json (never overwritten)
 python src/pipeline.py --run_eval
+
+# The older fixed pipeline, with retrieval routed by the ground-truth hints
+# Output: evaluation/runs/<UTC timestamp>_<model>.json
+python src/pipeline.py --run_eval --engine rag
 
 # While developing, run a subset to keep the cost low
 python src/pipeline.py --run_eval --limit 3

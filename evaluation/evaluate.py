@@ -645,7 +645,7 @@ def print_run_cost(run: dict) -> None:
     t = run.get("totals", {})
     cost = t.get("cost_usd")
     cost = f"${cost:.4f}" if cost is not None else "unknown"
-    print(f"  Pipeline run: {run.get('provider')}/{run.get('model')}  "
+    print(f"  Pipeline run: {run.get('engine', 'rag')} engine, {run.get('provider')}/{run.get('model')}  "
           f"[{run.get('status')}, {run.get('n_questions')} q, {run.get('started_at')}]")
     print(f"  Tokens in={t.get('input_tokens')} out={t.get('output_tokens')} "
           f"cache_read={t.get('cache_read_tokens')}  |  est. cost {cost}")
@@ -753,6 +753,7 @@ def main():
             "created_at":       datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "ground_truth":     str(args.ground_truth),
             "pipeline_output":  str(args.pipeline_output),
+            "engine":           run.get("engine", "rag"),
             "provider":         run.get("provider"),
             "model":            run.get("model"),
             "judge":            args.judge,

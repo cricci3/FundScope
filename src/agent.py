@@ -2,20 +2,25 @@
 agent.py — Agentic loop for FundScope
 ETF Research Assistant with tool-calling
 
-This is the real agent: the LLM decides which tools to call and in what order.
-It replaces the hardcoded query-type detection in ask.py with dynamic reasoning.
+This is the only entrypoint: the LLM decides which tools to call and in what
+order (ask.py is a thin alias of this script; pipeline.py --engine agent
+evaluates it on the ground truth).
 
 How it works:
-    1. User asks a question
+    1. User asks a question (after the last few remembered turns)
     2. LLM receives the question + tool definitions
     3. LLM returns either a tool call or a final answer
     4. If tool call → execute it, feed result back to LLM → repeat
-    5. If final answer → print and stop
+    5. If final answer → resolve its [Chunk N] citations, print and stop
 
-Tools available to the agent:
-    - search_etf_docs    : semantic search over your ChromaDB corpus
+Tools available to the agent (ISIN/issuer/doc_type/year enums come from the
+fund registry, src/registry.py):
+    - search_etf_docs    : semantic search over the ChromaDB corpus
+                           (isins, issuer, doc_type, year, mode single|comparative|cross_doc)
     - get_live_data      : fetch current price, returns, AUM via yfinance
     - list_available_etfs: list all ETFs in the corpus (no args needed)
+
+Interactive commands: funds, chunks, calls, reset, help, exit.
 
 Requirements:
     A tool-capable LLM configured in .env (default: Claude Haiku 4.5 via the
@@ -36,6 +41,7 @@ Usage:
     python src/agent.py --provider groq --model <model-id>
 """
 
+import re
 import json
 import argparse
 from dataclasses import dataclass, field
@@ -313,6 +319,20 @@ with no preamble about your searches (e.g. no "Now I have the information I need
 """
 
 
+# "Perfect! Now I have all the information I need." — narration about the
+# searches that the model sometimes puts before the answer despite the prompt.
+_PREAMBLE_RE = re.compile(
+    r"^\s*(?:perfect|great|excellent)\b|\b(?:i now have|now i have|let me)\b", re.I)
+
+
+def strip_preamble(text: str) -> str:
+    """Drop a short first line that only narrates the search (no citation), if present."""
+    first, _, rest = text.partition("\n")
+    if not rest.strip() or len(first) > 120 or "[" in first:
+        return text
+    return rest.lstrip() if _PREAMBLE_RE.search(first) else text
+
+
 def build_system_prompt() -> str:
     return SYSTEM_PROMPT.format(funds=_fund_list())
 
@@ -455,7 +475,7 @@ class Agent:
             text = "[Agent stopped: maximum iterations reached without a final answer.]"
 
         book     = self._executor.book
-        resolved = resolve_citations(text, book)
+        resolved = resolve_citations(strip_preamble(text), book)
         if resolved.unknown_refs:
             print(f"[agent] [warn] cited unknown chunk(s): {resolved.unknown_refs}")
 
@@ -525,13 +545,14 @@ HELP_TEXT = """
     <any question>   Ask anything about the ETFs
     funds            List ETFs in the corpus
     calls            Toggle showing tool calls (default: off)
+    chunks           Toggle showing the retrieved chunks (default: off)
     reset            Forget the conversation (follow-up questions use the last {turns} turns)
     help             Show this message
     exit / quit      Exit
 """
 
 
-def interactive_loop(agent: Agent, show_cost: bool = False) -> None:
+def interactive_loop(agent: Agent, show_cost: bool = False, show_chunks: bool = False) -> None:
     print("\n" + "═" * 64)
     print("  FundScope Agent — ETF Research Assistant")
     print("  Powered by tool-calling. The LLM decides what to look up.")
@@ -561,12 +582,15 @@ def interactive_loop(agent: Agent, show_cost: bool = False) -> None:
         elif cmd == "reset":
             agent.reset()
             print("  Conversation cleared.")
+        elif cmd == "chunks":
+            show_chunks = not show_chunks
+            print(f"  Show chunks: {'on' if show_chunks else 'off'}")
         elif cmd == "calls":
             agent._show_calls = not agent._show_calls
             print(f"  Show tool calls: {'on' if agent._show_calls else 'off'}")
         else:
             try:
-                ask_agent(agent, raw, show_cost)
+                ask_agent(agent, raw, show_cost, show_chunks)
             except Exception as e:
                 print(f"\n  [error] {e}\n")
 
@@ -587,6 +611,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--db_path",     type=Path, default=DB_PATH)
     p.add_argument("--show_calls",  action="store_true",
                    help="Print each tool call as it happens")
+    p.add_argument("--show_chunks", action="store_true",
+                   help="Print the retrieved chunks alongside the answer")
     p.add_argument("--show_cost",   action="store_true",
                    help="Print tokens and estimated cost of each question")
     return p
@@ -599,9 +625,9 @@ def main():
                       show_calls=args.show_calls)
 
     if args.query:
-        ask_agent(agent, args.query, show_cost=args.show_cost)
+        ask_agent(agent, args.query, show_cost=args.show_cost, show_chunks=args.show_chunks)
     else:
-        interactive_loop(agent, show_cost=args.show_cost)
+        interactive_loop(agent, show_cost=args.show_cost, show_chunks=args.show_chunks)
     print(f"  [session] {SESSION.summary()}")
 
 
