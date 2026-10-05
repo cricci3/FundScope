@@ -40,20 +40,20 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ---
 
-## Stato attuale (aggiornato 2026-10-02)
+## Stato attuale (aggiornato 2026-10-05)
 
-- **Branch:** `main`, tutto committato e pushato (`35c2235`). Il vecchio branch `refactor/cloud-llm` esiste ancora in locale e su `origin` → task 0.3 aperto, quindi la fase 0 non è formalmente chiusa.
-- **Test/lint:** nessuna suite né ruff (`uv run pytest` / `uv run ruff` → "program not found"; previsti in fase 8). Le verifiche di fase 2–3 (backend OpenAI-compat mockato, euristiche dello scorer) sono state fatte con script temporanei non salvati nel repo.
-- **Fatto nell'ultima sessione:** fasi 2 e 3 complete; baseline ufficiale `evaluation/baseline_cloud.json` (metriche sopra). Credito Anthropic speso finora ≈ 0,19 $.
+- **Branch:** `main`. Fase 4 implementata e committata in locale (un commit per task), **non ancora pushata**: in attesa di decidere se il criterio di fase è soddisfatto (vedi "Esito fase 4"). Il vecchio branch `refactor/cloud-llm` (già merged in `main`) esiste ancora in locale e su `origin` → task 0.3 aperto (cancellazione da confermare).
+- **Test/lint:** nessuna suite né ruff (previsti in fase 8). Le verifiche di fase 4 (risoluzione `[Chunk N]`, memoria con LLM finto, argomenti del tool di ricerca, preambolo) sono state fatte con script temporanei non salvati nel repo.
+- **Fatto nell'ultima sessione:** fase 4 (4.1–4.5): `src/registry.py`, `src/citations.py`, agent come unico entrypoint (`ask.py` = alias), memoria conversazionale, `pipeline.py --engine agent|rag`. Judge pass 35% → 71%. Credito Anthropic speso finora ≈ 1,16 $ (questa sessione ≈ 0,97 $, di cui due run complete agent + judge ≈ 0,67 $).
 - **Problemi aperti / scoperti:**
-  - 35% di astensioni: il documento giusto è recuperato ma non il chunk con il dato; precision/recall misurate per documento non lo vedono (vedi proposta sotto).
-  - `ask.py`: una domanda comparativa sugli "ongoing charges" viene instradata sui KID e recupera chunk inutili (coperto da 4.4).
-  - `get_live_data` mai provato con dati reali (Yahoo Finance irraggiungibile dalla sandbox): da verificare.
-  - Judge non deterministico (Sonnet 5.5 rifiuta `temperature`): differenze di ±1 domanda tra run sono rumore; variabilità reale da verificare.
-  - Backend OpenAI-compatibile (Groq/Gemini/OpenRouter) mai provato con una chiave vera; nessun fallback se Sonnet 5.5 risponde con `refusal`.
-- **Decisioni recenti:** il judge LLM è la metrica primaria, le euristiche sono un fallback gratuito; judge con effort `medium` (≈0,005 $/domanda); ground truth T2_007 corretta (il KID iShares dice "The Fund uses optimising techniques").
-- **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato contiene il valore atteso?), per misurare direttamente il collo di bottiglia prima della fase 5.
-- **Prossimo passo:** 1) chiudere 0.3: `git branch --merged main` deve elencare `refactor/cloud-llm`, poi cancellarlo in locale e su origin (chiedere conferma); 2) fase 4 partendo da 4.3 (registro fondi), da cui dipendono 4.1 e 4.4.
+  - Retrieval: valori nel layout a colonne del factsheet spezzati/mescolati ("Product Structure : Physical" iShares) → T1_006/T2_007 falliscono anche con più ricerche. Fase 5 (chunk più grandi, ibrido) e/o ingest.
+  - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (l'agent lo ha chiamato in T2_008): task 6.1. `EUNL.DE` funziona (`get_live_data` verificato con dati reali).
+  - L'agent costa ~0,012 $/domanda (3,2 chiamate, prompt che cresce a ogni ricerca; nessun cache hit perché Haiku 4.5 richiede prefissi ≥ 4096 token). Possibile ottimizzazione: breakpoint di cache sull'ultimo messaggio, oppure meno chunk per ricerca.
+  - Haiku a volte aggiunge esempi numerici inventati (T4_001) nonostante la regola nel system prompt.
+  - Judge non deterministico (±1 domanda tra run). Backend OpenAI-compatibile mai provato con una chiave vera.
+- **Decisioni recenti:** `pipeline.py` valuta di default l'agent (`--engine agent`), che riceve solo la domanda; la pipeline fissa resta come `--engine rag`. Il judge riceve il registro fondi dato all'agent (`reference_data`) e lo conta come contesto. Le citazioni sono `[Chunk N]` risolte dal codice (citazioni native Anthropic non adottate). `baseline_cloud.json` resta la baseline ufficiale finché non si decide di promuovere `report_phase4_agent.json`.
+- **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato/citato contiene il valore atteso?). L'output della pipeline ora salva `cited_chunk_ids`, utile per calcolarla.
+- **Prossimo passo:** 1) decidere se accettare la fase 4 (criterio rispettato sulla metrica primaria, −1 domanda su grounded/attribution) e pushare; 2) chiudere 0.3; 3) fase 5.
 
 ---
 
@@ -227,6 +227,32 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 - [x] **4.5 Citazioni strutturate** — il modello cita i chunk (`[Chunk 3]`) e il codice li risolve nei metadati reali, invece di fargli scrivere a mano `[ISIN | issuer | doc_type | year]`.
   - Alternativa da valutare con il backend Anthropic: le **citazioni native** (chunk passati come documenti; la risposta contiene i passaggi citati). Va esposta tramite l'interfaccia neutra in modo opzionale (gli altri provider ricadono sul formato `[Chunk N]`).
   - Done quando (fase 4): metriche ≥ baseline 3.7, attribution in miglioramento.
+  - *Citazioni native Anthropic non implementate: il formato `[Chunk N]` risolto in `src/citations.py` vale per tutti i provider.*
+
+**Esito fase 4 (05/10/2026)** — run `evaluation/runs/20261005T130107Z_claude-haiku-4-5_agent.json`, report
+`evaluation/report_phase4_agent.json` (agent, Haiku 4.5, judge Sonnet 5.5, 17 domande; indice ricostruito, 299 chunk).
+L'agent vede solo il testo della domanda (nessun hint dalla ground truth). Costo: pipeline 0,210 $ + judge 0,129 $ = 0,339 $
+(≈ 0,012 $/domanda, 3,2 chiamate LLM/domanda; l'agent costa ~7× la pipeline fissa).
+
+| Metrica | Baseline 3.7 | Fase 4 (agent) | Delta |
+|---|---|---|---|
+| Judge verdict pass | 35.3% | **70.6%** | +35.3 |
+| Judge correctness | 46.7% | 83.3% | +36.6 |
+| Judge grounded | 82.4% | 76.5% | −5.9 (1 domanda) |
+| Judge abstained | 35.3% | 5.9% | −29.4 |
+| Attribution | 88.2% | 82.4% | −5.9 (1 domanda) |
+| Retrieval precision / recall (documento) | 0.988 / 1.000 | 0.851 / 0.941 | −0.137 / −0.059 |
+
+Lettura: il criterio "metriche ≥ baseline" è rispettato sulla metrica primaria (pass ×2, astensioni da 35% a 6%) ma
+non alla lettera su grounded/attribution/retrieval:
+- T1_003 ("qual è l'ISIN di …") è risolta dal registro fondi nel system prompt senza cercare: 0 chunk e nessuna
+  citazione → da sola vale −0.059 su recall e attribution. Il judge ora riceve il registro come "reference data"
+  (`reference_data` nell'output della pipeline) e la considera grounded.
+- La precision scende perché l'agent fa più ricerche (fino a 10) e recupera anche documenti non richiesti dalla ground truth.
+- Grounded −1 domanda è nell'ordine del rumore del judge; i non-grounded rimasti sono T4_001 (esempio numerico
+  inventato, nonostante la regola nel prompt), T4_002, T2_007, T2_008.
+- Fallimenti residui = retrieval: "Product Structure: Physical" del factsheet iShares è spezzato dal layout a colonne
+  e non viene trovato (T1_006, T2_007) → fase 5 / ingest.
 
 ---
 
