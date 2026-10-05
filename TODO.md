@@ -42,7 +42,7 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ## Stato attuale (aggiornato 2026-10-05)
 
-- **Branch:** `main`. Fase 4 implementata e committata in locale (un commit per task), **non ancora pushata**: in attesa di decidere se il criterio di fase è soddisfatto (vedi "Esito fase 4"). Il vecchio branch `refactor/cloud-llm` (già merged in `main`) esiste ancora in locale e su `origin` → task 0.3 aperto (cancellazione da confermare).
+- **Branch:** si lavora solo su `main`. Fase 4 accettata (05/10/2026) e pushata su `origin/main`. Branch locale `refactor/cloud-llm` cancellato; resta solo la copia su GitHub (`origin/refactor/cloud-llm`) → task 0.3 aperto finché non si conferma `git push origin --delete refactor/cloud-llm`.
 - **Test/lint:** nessuna suite né ruff (previsti in fase 8). Le verifiche di fase 4 (risoluzione `[Chunk N]`, memoria con LLM finto, argomenti del tool di ricerca, preambolo) sono state fatte con script temporanei non salvati nel repo.
 - **Fatto nell'ultima sessione:** fase 4 (4.1–4.5): `src/registry.py`, `src/citations.py`, agent come unico entrypoint (`ask.py` = alias), memoria conversazionale, `pipeline.py --engine agent|rag`. Judge pass 35% → 71%. Credito Anthropic speso finora ≈ 1,16 $ (questa sessione ≈ 0,97 $, di cui due run complete agent + judge ≈ 0,67 $).
 - **Problemi aperti / scoperti:**
@@ -53,7 +53,7 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
   - Judge non deterministico (±1 domanda tra run). Backend OpenAI-compatibile mai provato con una chiave vera.
 - **Decisioni recenti:** `pipeline.py` valuta di default l'agent (`--engine agent`), che riceve solo la domanda; la pipeline fissa resta come `--engine rag`. Il judge riceve il registro fondi dato all'agent (`reference_data`) e lo conta come contesto. Le citazioni sono `[Chunk N]` risolte dal codice (citazioni native Anthropic non adottate). `baseline_cloud.json` resta la baseline ufficiale finché non si decide di promuovere `report_phase4_agent.json`.
 - **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato/citato contiene il valore atteso?). L'output della pipeline ora salva `cited_chunk_ids`, utile per calcolarla.
-- **Prossimo passo:** 1) decidere se accettare la fase 4 (criterio rispettato sulla metrica primaria, −1 domanda su grounded/attribution) e pushare; 2) chiudere 0.3; 3) fase 5.
+- **Prossimo passo:** 1) chiudere 0.3 cancellando il branch remoto (da confermare); 2) fase 5, partendo dal retrieval a livello di chunk.
 
 ---
 
