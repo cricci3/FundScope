@@ -62,6 +62,12 @@ from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, g
 
 MAX_ITERATIONS  = 6              # safety cap on the agent loop
 HISTORY_TURNS   = 5              # past question/answer pairs kept in interactive mode
+
+# Appended to the last tool result before the final allowed call
+FINAL_CALL_NOTICE = (
+    "\n\n[Search limit reached: do not call any more tools. Answer now from the results "
+    "above, and say which facts the documents did not provide.]"
+)
 MAX_TOKENS      = 1024
 K_SINGLE        = 6              # chunks for a single-fund search
 K_PER_ETF       = 3              # chunks per fund in comparative mode
@@ -301,10 +307,13 @@ You have access to two sources of information:
 
 Rules:
 - State fund facts ONLY from tool results, never from outside knowledge. Quote numbers \
-exactly as they appear.
+exactly as they appear. Do not add your own calculations, worked examples or general \
+claims about markets, and never carry a fact over from one fund to the other: if a \
+document does not state something for a fund, say so for that fund.
 - Every document chunk is labelled [Chunk N]. Cite every document fact with the chunk \
 it comes from, e.g. "The TER is 0.20% [Chunk 2]." Several chunks: [Chunk 1, 4]. Only \
-cite chunk numbers you have seen. Cite live market data as [live data].
+cite chunk numbers you have seen. Facts repeated in a summary or conclusion need their \
+citation too. Cite live market data as [live data].
 - If the results do not contain the answer, search again with other wording (e.g. \
 "Total Expense Ratio", "ongoing charges", "costs over time") or another doc_type before \
 concluding. Only then say: "The provided documents do not contain sufficient information."
@@ -326,11 +335,14 @@ _PREAMBLE_RE = re.compile(
 
 
 def strip_preamble(text: str) -> str:
-    """Drop a short first line that only narrates the search (no citation), if present."""
-    first, _, rest = text.partition("\n")
-    if not rest.strip() or len(first) > 120 or "[" in first:
-        return text
-    return rest.lstrip() if _PREAMBLE_RE.search(first) else text
+    """
+    Drop leading paragraphs that narrate the search ("Perfect! ... Let me verify ..."),
+    as long as an answer follows them.
+    """
+    paragraphs = re.split(r"\n\s*\n", text.strip())
+    while len(paragraphs) > 1 and _PREAMBLE_RE.search(paragraphs[0]):
+        paragraphs.pop(0)
+    return "\n\n".join(paragraphs)
 
 
 def build_system_prompt() -> str:
@@ -401,6 +413,11 @@ class Agent:
         return self._llm.model
 
     @property
+    def reference_data(self) -> str:
+        """Facts the system prompt gives the model (the fund registry), for the judge."""
+        return f"Funds in the corpus: {_fund_list()}."
+
+    @property
     def history_len(self) -> int:
         return len(self._history)
 
@@ -467,6 +484,10 @@ class Agent:
                                           "error": output if is_error else None})
                 messages.append(Message("tool", output, tool_call_id=tc.id,
                                         is_error=is_error))
+
+            # The next call is the last one: ask for the answer instead of more searches
+            if iteration == MAX_ITERATIONS - 2:
+                messages[-1].content += FINAL_CALL_NOTICE
 
             # Loop — LLM will now read the tool results and decide next step
         else:

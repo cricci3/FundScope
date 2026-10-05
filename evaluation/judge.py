@@ -65,8 +65,9 @@ without giving a wrong value.
    - "not_applicable": only for rubric-based questions (no expected answer); then judge \
 the rubric items instead.
 
-2. grounded — is every factual claim in the answer supported by the retrieved context? \
-Judge only against the context shown, never against your own knowledge or the reference. \
+2. grounded — is every factual claim in the answer supported by the retrieved context \
+(plus the assistant reference data, when given: facts the assistant was told in its \
+instructions, such as fund names and ISINs)? Judge only against the context shown, never against your own knowledge or the reference. \
 List each claim that the context does not support in unsupported_claims (empty list if none). \
 Citation tags like [ISIN | issuer | doc_type | year] are not claims. A statement that the \
 documents lack some information is not an unsupported claim.
@@ -100,6 +101,12 @@ def _format_context(entry: dict) -> str:
     )
 
 
+def _format_reference_data(entry: dict) -> str:
+    """Fund registry given to the agent in its system prompt (agent runs only)."""
+    data = entry.get("reference_data")
+    return f"ASSISTANT REFERENCE DATA (from its instructions):\n{data}\n\n" if data else ""
+
+
 def _rubric_texts(items: list) -> list:
     return [i["item"] if isinstance(i, dict) else str(i) for i in items or []]
 
@@ -119,6 +126,7 @@ def build_prompt(question: dict, entry: dict) -> str:
     return (
         f"QUESTION:\n{question['question']}\n\n"
         f"{reference}\n\n"
+        f"{_format_reference_data(entry)}"
         f"RETRIEVED CONTEXT:\n{_format_context(entry)}\n\n"
         f"ASSISTANT ANSWER:\n{entry.get('generated_answer', '')}"
     )

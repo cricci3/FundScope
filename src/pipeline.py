@@ -106,6 +106,7 @@ class PipelineResult:
     engine: str = "rag"
     tool_calls: list[dict] = field(default_factory=list)   # agent only
     iterations: int = 1                                      # LLM calls for this question
+    reference_data: str = ""        # agent only: facts given in its system prompt (for the judge)
 
 
 # ── Query type inference ───────────────────────────────────────────────────────
@@ -265,6 +266,7 @@ def run_agent_query(
         engine="agent",
         tool_calls=result.tool_calls,
         iterations=result.iterations,
+        reference_data=agent.reference_data,
     )
 
 
