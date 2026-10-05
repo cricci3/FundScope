@@ -44,7 +44,8 @@ from pathlib import Path
 from config import INDEX_PATH as DB_PATH
 from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, get_llm
 from retrieve import Retriever, route_query
-from live_data import get_etf_live_data, format_for_prompt, ISIN_TO_NAME
+from live_data import get_etf_live_data, format_for_prompt
+from registry import FUNDS
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
@@ -53,10 +54,7 @@ MAX_ITERATIONS  = 6              # safety cap on the agent loop
 MAX_TOKENS      = 1024
 K_RETRIEVE      = 6              # chunks per retrieval call
 
-KNOWN_ISINS = {
-    "IE00B4L5Y983": {"issuer": "ishares", "name": "iShares Core MSCI World"},
-    "IE00BD4TXV59": {"issuer": "ubs",     "name": "UBS Core MSCI World"},
-}
+KNOWN_ISINS = {isin: {"issuer": f.issuer, "name": f.name} for isin, f in FUNDS.items()}
 
 
 # ── Tool definitions (sent to the LLM) ────────────────────────────────────────

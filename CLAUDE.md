@@ -76,4 +76,5 @@ RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `all-Mi
 
 ### Known pitfalls
 
+- On this machine Git Bash heredocs corrupt non-ASCII characters (`—`, `→`, `─` are common in this repo): write multi-line patches/scripts with the file Write/Edit tools, not `cat <<EOF`.
 - ISIN/name/ticker maps are duplicated in `ask.py`, `agent.py` and `live_data.py`; adding an ETF means updating `metadata.json` plus these copies (until `src/registry.py`, TODO 4.3).

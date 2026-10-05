@@ -29,16 +29,14 @@ from config import INDEX_PATH as DB_PATH
 from retrieve import Retriever, route_query
 from generate import Generator, build_context
 from llm import PROVIDERS, SESSION
+from registry import FUNDS
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 K_DEFAULT  = 6
 
-# Known ISINs in the corpus — used for automatic query routing
-KNOWN_ISINS = {
-    "IE00B4L5Y983": {"issuer": "ishares", "name": "iShares Core MSCI World"},
-    "IE00BD4TXV59": {"issuer": "ubs",     "name": "UBS Core MSCI World"},
-}
+# Known ISINs in the corpus (from the fund registry) — used for automatic query routing
+KNOWN_ISINS = {isin: {"issuer": f.issuer, "name": f.name} for isin, f in FUNDS.items()}
 
 # Keywords that suggest a comparative query
 COMPARATIVE_KEYWORDS = [

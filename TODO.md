@@ -40,6 +40,23 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ---
 
+## Stato attuale (aggiornato 2026-10-02)
+
+- **Branch:** `main`, tutto committato e pushato (`35c2235`). Il vecchio branch `refactor/cloud-llm` esiste ancora in locale e su `origin` → task 0.3 aperto, quindi la fase 0 non è formalmente chiusa.
+- **Test/lint:** nessuna suite né ruff (`uv run pytest` / `uv run ruff` → "program not found"; previsti in fase 8). Le verifiche di fase 2–3 (backend OpenAI-compat mockato, euristiche dello scorer) sono state fatte con script temporanei non salvati nel repo.
+- **Fatto nell'ultima sessione:** fasi 2 e 3 complete; baseline ufficiale `evaluation/baseline_cloud.json` (metriche sopra). Credito Anthropic speso finora ≈ 0,19 $.
+- **Problemi aperti / scoperti:**
+  - 35% di astensioni: il documento giusto è recuperato ma non il chunk con il dato; precision/recall misurate per documento non lo vedono (vedi proposta sotto).
+  - `ask.py`: una domanda comparativa sugli "ongoing charges" viene instradata sui KID e recupera chunk inutili (coperto da 4.4).
+  - `get_live_data` mai provato con dati reali (Yahoo Finance irraggiungibile dalla sandbox): da verificare.
+  - Judge non deterministico (Sonnet 5.5 rifiuta `temperature`): differenze di ±1 domanda tra run sono rumore; variabilità reale da verificare.
+  - Backend OpenAI-compatibile (Groq/Gemini/OpenRouter) mai provato con una chiave vera; nessun fallback se Sonnet 5.5 risponde con `refusal`.
+- **Decisioni recenti:** il judge LLM è la metrica primaria, le euristiche sono un fallback gratuito; judge con effort `medium` (≈0,005 $/domanda); ground truth T2_007 corretta (il KID iShares dice "The Fund uses optimising techniques").
+- **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato contiene il valore atteso?), per misurare direttamente il collo di bottiglia prima della fase 5.
+- **Prossimo passo:** 1) chiudere 0.3: `git branch --merged main` deve elencare `refactor/cloud-llm`, poi cancellarlo in locale e su origin (chiedere conferma); 2) fase 4 partendo da 4.3 (registro fondi), da cui dipendono 4.1 e 4.4.
+
+---
+
 ## Fase 0 — Preparazione
 
 - [x] **0.1 Branch di lavoro** — ~~creare `refactor/cloud-llm` da `main`~~. Superato: il lavoro della fase 1 è già stato integrato in `main`; da ora si lavora solo su `main` (vedi 0.3).
@@ -200,7 +217,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 
 - [ ] **4.2 Memoria conversazionale** — history mantenuta tra domande in modalità interattiva (comando `reset`), troncata a N turni.
 
-- [ ] **4.3 Registro fondi unico** — `src/registry.py` che costruisce `KNOWN_ISINS` (nome, issuer, ticker Yahoo) da `metadata.json`; eliminare le copie in `ask.py`, `agent.py`, `live_data.py` (`ISIN_TO_NAME`, `ISIN_TO_TICKER`). Aggiungere il campo `yahoo_ticker` in `metadata.json`.
+- [x] **4.3 Registro fondi unico** — `src/registry.py` che costruisce `KNOWN_ISINS` (nome, issuer, ticker Yahoo) da `metadata.json`; eliminare le copie in `ask.py`, `agent.py`, `live_data.py` (`ISIN_TO_NAME`, `ISIN_TO_TICKER`). Aggiungere il campo `yahoo_ticker` in `metadata.json`.
 
 - [ ] **4.4 Deprecare il router a keyword di `ask.py`**
   - `ask.py` diventa un wrapper sottile sopra `Agent` (o viene rimosso), mantenendo i comandi `funds`, `chunks`, `help`, `exit`.

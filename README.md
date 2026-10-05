@@ -57,7 +57,8 @@ FundScope/
 │   ├── ask.py                    # Interactive entrypoint — start here
 │   ├── agent.py                  # Tool-calling agent (docs search + live market data)
 │   ├── config.py                 # Paths + LLM settings (reads .env)
-│   ├── metadata.json             # Document registry (ISIN, issuer, year, doc type)
+│   ├── metadata.json             # Document registry (ISIN, name, issuer, year, doc type, Yahoo ticker)
+│   ├── registry.py               # Fund registry built from metadata.json (ISIN → name, issuer, ticker)
 │   ├── ingest.py                 # PDF extraction, cleaning, chunking
 │   ├── embed.py                  # Embedding + ChromaDB indexing
 │   ├── retrieve.py               # Semantic search + metadata filtering
@@ -210,17 +211,21 @@ Place your ETF factsheets and KIDs in `data/raw/`. Then register each file in `s
 ```json
 {
   "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
-    "ticker": "EUNL",
+    "isin": "IE00B4L5Y983",
+    "name": "iShares Core MSCI World UCITS ETF",
     "issuer": "ishares",
     "category": "MSCI World",
     "type": "factsheet",
     "currency": "USD",
     "share_class": "acc",
     "year": 2026,
-    "quarter": "Q4"
+    "quarter": "Q4",
+    "yahoo_ticker": "EUNL.DE"
   }
 }
 ```
+
+`name` and `yahoo_ticker` are fund-level fields: repeat them identically on every document of the same ISIN (`src/registry.py` groups the documents by ISIN and rejects inconsistent entries; `python src/registry.py` prints the resulting fund list).
 
 Supported issuers: `ishares`, `ubs`, `xtrackers`, `amundi`. Document types: `factsheet`, `kid`.
 
@@ -403,9 +408,8 @@ The report breaks down scores by query type (factual, comparative, synthetic) an
 ## Adding more ETFs
 
 1. Place the new PDF files in `data/raw/`
-2. Add entries to `src/metadata.json`
-3. Add the ISIN and fund name to the `KNOWN_ISINS` dicts in `src/ask.py` and `src/agent.py` (and the ticker map in `src/live_data.py`)
-4. Re-run ingest, embed (without `--rebuild`), and you are ready to ask questions about the new fund
+2. Add entries to `src/metadata.json` (one per PDF, with the fund-level fields `name` and `yahoo_ticker` repeated identically on every document of the same ISIN). `src/registry.py` builds the fund list from this file, so the agent tools, `ask.py` and `live_data.py` pick up the new fund automatically
+3. Re-run ingest, embed (without `--rebuild`), and you are ready to ask questions about the new fund
 
 ```bash
 python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
@@ -433,7 +437,7 @@ python src/embed.py --input_dir data/processed/ --db_path index/chroma_db/
 
 ## Limitations
 
-- Corpus is currently limited to two ETFs (iShares and UBS MSCI World). Adding more funds requires downloading documents and updating `metadata.json` and the ISIN maps listed above.
+- Corpus is currently limited to two ETFs (iShares and UBS MSCI World). Adding more funds requires downloading documents and updating `metadata.json`.
 - Answer generation needs network access and an API key with credit; without them only retrieval works.
 - Temporal queries (comparing the same ETF across different years) require downloading documents from multiple years. The evaluation scaffolding for this is in place (`_parked_type3` in `ground_truth.json`) but inactive until multi-year data is available.
 - Embedding runs on CPU. Embedding ~500 chunks takes approximately 10–20 seconds. No GPU is required.

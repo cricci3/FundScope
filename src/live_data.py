@@ -26,22 +26,7 @@ except ImportError:
         "yfinance is required for live market data."
     )
 
-
-# ── Ticker map ─────────────────────────────────────────────────────────────────
-# Maps ISINs to Yahoo Finance tickers.
-# Yahoo Finance does not support ISIN lookups directly — this map bridges them.
-# Extend this as you add more ETFs to the corpus.
-
-ISIN_TO_TICKER: dict[str, str] = {
-    "IE00B4L5Y983": "EUNL.DE",   # iShares Core MSCI World UCITS ETF (EUR, Xetra)
-    "IE00BD4TXV59": "0P0001FMRI.L",  # UBS Core MSCI World (GBP, London — best available)
-}
-
-# Human-readable names for display
-ISIN_TO_NAME: dict[str, str] = {
-    "IE00B4L5Y983": "iShares Core MSCI World",
-    "IE00BD4TXV59": "UBS Core MSCI World",
-}
+from registry import get_fund
 
 
 # ── Core fetch ─────────────────────────────────────────────────────────────────
@@ -51,7 +36,8 @@ def get_etf_live_data(isin_or_ticker: str, period_months: int = 3) -> dict:
     Fetch live price and performance data for an ETF.
 
     Args:
-        isin_or_ticker: An ISIN (looked up via ISIN_TO_TICKER) or a raw ticker string.
+        isin_or_ticker: An ISIN (its Yahoo ticker comes from the fund registry,
+                        i.e. `yahoo_ticker` in metadata.json) or a raw ticker string.
         period_months:  How many months of history to fetch for return calculations.
 
     Returns:
@@ -59,10 +45,14 @@ def get_etf_live_data(isin_or_ticker: str, period_months: int = 3) -> dict:
         On failure, returns {"error": "...", "isin_or_ticker": "..."}.
     """
     # Resolve ticker
-    if isin_or_ticker.upper() in ISIN_TO_TICKER:
-        isin   = isin_or_ticker.upper()
-        ticker = ISIN_TO_TICKER[isin]
-        name   = ISIN_TO_NAME.get(isin, isin)
+    fund = get_fund(isin_or_ticker)
+    if fund is not None:
+        if not fund.yahoo_ticker:
+            return {"error": "No Yahoo ticker registered (yahoo_ticker in metadata.json).",
+                    "isin_or_ticker": isin_or_ticker}
+        isin   = fund.isin
+        ticker = fund.yahoo_ticker
+        name   = fund.name
     else:
         isin   = None
         ticker = isin_or_ticker

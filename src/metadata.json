@@ -1,42 +1,50 @@
 {
   "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
     "isin": "IE00B4L5Y983",
+    "name": "iShares Core MSCI World UCITS ETF",
     "issuer": "ishares",
     "category": "MSCI World",
     "type": "factsheet",
     "currency": "USD",
     "share_class": "acc",
     "year": 2026,
-    "quarter": "Q4"
+    "quarter": "Q4",
+    "yahoo_ticker": "EUNL.DE"
   },
   "iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
     "isin": "IE00B4L5Y983",
+    "name": "iShares Core MSCI World UCITS ETF",
     "issuer": "ishares",
     "category": "MSCI World",
     "type": "kid",
     "currency": "USD",
     "share_class": "acc",
     "year": 2026,
-    "quarter": null
+    "quarter": null,
+    "yahoo_ticker": "EUNL.DE"
   },
   "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_factsheet.pdf": {
     "isin": "IE00BD4TXV59",
+    "name": "UBS Core MSCI World UCITS ETF",
     "issuer": "ubs",
     "category": "MSCI World",
     "type": "factsheet",
     "currency": "USD",
     "share_class": "acc",
     "year": 2026,
-    "quarter": "Q4"
+    "quarter": "Q4",
+    "yahoo_ticker": "0P0001FMRI.L"
   },
   "UBS_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf": {
     "isin": "IE00BD4TXV59",
+    "name": "UBS Core MSCI World UCITS ETF",
     "issuer": "ubs",
     "category": "MSCI World",
     "type": "kid",
     "currency": "USD",
     "share_class": "acc",
     "year": 2026,
-    "quarter": null
+    "quarter": null,
+    "yahoo_ticker": "0P0001FMRI.L"
   }
 }
