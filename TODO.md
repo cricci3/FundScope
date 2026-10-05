@@ -224,7 +224,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
   - In alternativa, per un percorso non agentico: router via LLM con output strutturato (JSON: isins, doc_types, mode, query_type) al posto delle keyword (oggi `"less"` matcha `"unless"` e `cross_doc` non scatta mai perché `doc_type` è sempre impostato).
   - `pipeline.py` deve poter valutare anche l'agent.
 
-- [ ] **4.5 Citazioni strutturate** — il modello cita i chunk (`[Chunk 3]`) e il codice li risolve nei metadati reali, invece di fargli scrivere a mano `[ISIN | issuer | doc_type | year]`.
+- [x] **4.5 Citazioni strutturate** — il modello cita i chunk (`[Chunk 3]`) e il codice li risolve nei metadati reali, invece di fargli scrivere a mano `[ISIN | issuer | doc_type | year]`.
   - Alternativa da valutare con il backend Anthropic: le **citazioni native** (chunk passati come documenti; la risposta contiene i passaggi citati). Va esposta tramite l'interfaccia neutra in modo opzionale (gli altri provider ricadono sul formato `[Chunk N]`).
   - Done quando (fase 4): metriche ≥ baseline 3.7, attribution in miglioramento.
 

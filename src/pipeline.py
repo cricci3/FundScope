@@ -80,6 +80,8 @@ class PipelineResult:
     retrieved_chunks: list[dict]     # serialisable dicts for evaluate.py
     generated_answer: str
     cited_sources: list[dict]        # serialisable dicts for evaluate.py
+    raw_answer: str = ""             # before [Chunk N] citations were resolved
+    cited_chunk_ids: list[str] = field(default_factory=list)
     chunks_used: int = 0
     provider: str = ""
     model: str = ""
@@ -202,6 +204,8 @@ def run_query(
         retrieved_chunks=[chunk_to_dict(c) for c in chunks],
         generated_answer=result.answer,
         cited_sources=[asdict(s) for s in result.cited_sources],
+        raw_answer=result.raw_answer,
+        cited_chunk_ids=result.cited_chunk_ids,
         chunks_used=result.chunks_used,
         provider=result.provider,
         model=result.model,

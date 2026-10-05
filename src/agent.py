@@ -38,15 +38,17 @@ Usage:
 
 import json
 import argparse
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 # ── Local imports ──────────────────────────────────────────────────────────────
 from config import INDEX_PATH as DB_PATH
-from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, get_llm
+from citations import ChunkBook, chunk_header, resolve_citations
+from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, Usage, get_llm
 from retrieve import Retriever, RetrievedChunk
 from live_data import get_etf_live_data, format_for_prompt
-from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years,
+from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, get_fund,
                       resolve_isins)
 
 
@@ -176,6 +178,12 @@ TOOLS = build_tools()
 class ToolExecutor:
     def __init__(self, retriever: Retriever):
         self._retriever = retriever
+        self.new_question()
+
+    def new_question(self) -> None:
+        """Restart chunk numbering: [Chunk N] is only valid within one question."""
+        self.book = ChunkBook()
+        self.retrieved: list[RetrievedChunk] = []
 
     def execute(self, name: str, arguments: dict, show_calls: bool = False) -> str:
         if show_calls:
@@ -242,21 +250,24 @@ class ToolExecutor:
         return self._retriever.single(query=query, filters=filters, k=K_SINGLE)
 
     def _search_etf_docs(self, query: str, **kwargs) -> str:
-        """Run semantic search and return formatted chunks as a string."""
+        """Run semantic search and return the chunks, numbered for citation, as text."""
         chunks = self.search(query, **kwargs)
+        self.retrieved.extend(chunks)
         if not chunks:
             return "No relevant document chunks found for this query."
 
-        # Format chunks as plain text for the LLM to read
+        # Numbers run across every search of the same question; a chunk already
+        # shown keeps its number and is not repeated.
         lines = []
-        for i, c in enumerate(chunks, 1):
-            lines.append(
-                f"[Chunk {i} | {c.etf_isin} | {c.issuer} | {c.doc_type} | "
-                f"{c.year} | section: {c.section_heading or 'unknown'}]"
-            )
-            lines.append(c.text)
-            lines.append("")
-        return "\n".join(lines)
+        for c in chunks:
+            n, is_new = self.book.add(c)
+            if is_new:
+                lines.append(chunk_header(n, c))
+                lines.append(c.text)
+                lines.append("")
+            else:
+                lines.append(f"[Chunk {n}] (already shown above)")
+        return "\n".join(lines).strip()
 
     def _get_live_data(self, isin: str) -> str:
         """Fetch live market data and return as a formatted string."""
@@ -275,21 +286,54 @@ class ToolExecutor:
 SYSTEM_PROMPT = """\
 You are FundScope, an ETF research assistant.
 
+Funds in the corpus: {funds}.
+
 You have access to two sources of information:
 1. ETF document corpus (factsheets and KIDs) — search with search_etf_docs
 2. Live market data (prices, returns, AUM) — fetch with get_live_data
 
 Rules:
-- Always cite document facts as [ISIN | issuer | doc_type | year].
-- For questions about performance or price, always use get_live_data.
-- For questions about costs, risk, or fund structure, always use search_etf_docs.
-- For broad questions, use both tools.
-- Be concise. Do not repeat tool output verbatim — synthesize it.
-- If you cannot answer from the available tools, say so clearly.
+- State fund facts ONLY from tool results, never from outside knowledge. Quote numbers \
+exactly as they appear.
+- Every document chunk is labelled [Chunk N]. Cite every document fact with the chunk \
+it comes from, e.g. "The TER is 0.20% [Chunk 2]." Several chunks: [Chunk 1, 4]. Only \
+cite chunk numbers you have seen. Cite live market data as [live data].
+- If the results do not contain the answer, search again with other wording (e.g. \
+"Total Expense Ratio", "ongoing charges", "costs over time") or another doc_type before \
+concluding. Only then say: "The provided documents do not contain sufficient information."
+- For questions about performance or price, use get_live_data; for costs, risk or fund \
+structure, use search_etf_docs; for broad questions, use both.
+- Comparisons: cover each fund (or document) in turn and end with a one-sentence summary \
+of the key difference.
+- Suitability or summary questions: cover costs (TER/ongoing charges), replication method \
+and risk profile (SRI) of each fund, then conclude with a clear evidence-based answer.
+- Be concise. Do not repeat tool output verbatim — synthesize it. Write only the answer, \
+with no preamble about your searches (e.g. no "Now I have the information I need").
 """
 
 
+def build_system_prompt() -> str:
+    return SYSTEM_PROMPT.format(funds=_fund_list())
+
+
 # ── Agent loop ─────────────────────────────────────────────────────────────────
+
+@dataclass
+class AgentResult:
+    question: str
+    answer: str                    # [Chunk N] tags resolved to [ISIN | issuer | doc_type | year]
+    raw_answer: str = ""           # as written by the model
+    chunks: list = field(default_factory=list)          # list[RetrievedChunk], numbered 1..N
+    cited_sources: list = field(default_factory=list)   # list[CitedSource]
+    cited_chunks: list = field(default_factory=list)    # chunk numbers cited
+    tool_calls: list = field(default_factory=list)      # [{"name", "arguments", "error"}]
+    iterations: int = 0
+    stop_reason: str = ""          # answer | max_iterations | empty
+    provider: str = ""
+    model: str = ""
+    usage: Usage = field(default_factory=Usage)
+    cost_usd: Optional[float] = None
+
 
 class Agent:
     """
@@ -300,6 +344,8 @@ class Agent:
       2. If the LLM returns tool calls → execute them, append results, loop
       3. If the LLM returns a text message → that is the final answer
       4. Hard stop after MAX_ITERATIONS to prevent runaway loops
+    The [Chunk N] citations of the final answer are then resolved to the
+    metadata of the chunks the tools returned (citations.py).
     """
 
     def __init__(
@@ -312,27 +358,50 @@ class Agent:
     ):
         self._llm      = llm or get_llm("generator", provider, model)
         self._executor = ToolExecutor(retriever)
+        self._system   = build_system_prompt()
         self._show_calls = show_calls
         print(f"[agent] Provider: {self._llm.provider}  |  Model: {self._llm.model}")
 
-    def run(self, question: str) -> str:
-        """
-        Run the agent loop for a single question.
-        Returns the final answer string.
-        """
+    @property
+    def provider(self) -> str:
+        return self._llm.provider
+
+    @property
+    def model(self) -> str:
+        return self._llm.model
+
+    def run(self, question: str) -> AgentResult:
+        """Run the agent loop for a single question."""
+        self._executor.new_question()
+        result   = AgentResult(question=question, answer="",
+                               provider=self._llm.provider, model=self._llm.model)
+        priced   = True
+        cost     = 0.0
         messages = [Message("user", question)]
+        text     = ""
 
         for iteration in range(MAX_ITERATIONS):
             response = self._llm.chat(
                 messages,
-                system=SYSTEM_PROMPT,
+                system=self._system,
                 tools=TOOLS,
                 max_tokens=MAX_TOKENS,
             )
+            result.iterations += 1
+            result.model = response.model or result.model
+            result.usage = result.usage + response.usage
+            if response.cost_usd is None:
+                priced = False
+            else:
+                cost += response.cost_usd
 
             # ── Case 1: LLM produced a final answer ───────────────────────────
             if not response.tool_calls:
-                return response.text or f"[Agent stopped: empty answer ({response.stop_reason}).]"
+                text = response.text
+                result.stop_reason = "answer" if text else "empty"
+                if not text:
+                    text = f"[Agent stopped: empty answer ({response.stop_reason}).]"
+                break
 
             # ── Case 2: LLM wants to call tools ───────────────────────────────
             messages.append(response.to_message())
@@ -341,51 +410,84 @@ class Agent:
                 is_error = False
                 if tc.error:
                     # Malformed arguments: tell the model so it can retry
-                    result, is_error = f"[tool error] {tc.error}", True
+                    output, is_error = f"[tool error] {tc.error}", True
                 else:
                     try:
-                        result = self._executor.execute(
+                        output = self._executor.execute(
                             tc.name, tc.arguments, show_calls=self._show_calls
                         )
                     except Exception as e:
-                        result, is_error = f"[tool error] {type(e).__name__}: {e}", True
+                        output, is_error = f"[tool error] {type(e).__name__}: {e}", True
 
-                messages.append(Message("tool", result, tool_call_id=tc.id,
+                result.tool_calls.append({"name": tc.name, "arguments": tc.arguments,
+                                          "error": output if is_error else None})
+                messages.append(Message("tool", output, tool_call_id=tc.id,
                                         is_error=is_error))
 
             # Loop — LLM will now read the tool results and decide next step
+        else:
+            # Safety fallback
+            result.stop_reason = "max_iterations"
+            text = "[Agent stopped: maximum iterations reached without a final answer.]"
 
-        # Safety fallback
-        return "[Agent stopped: maximum iterations reached without a final answer.]"
+        book     = self._executor.book
+        resolved = resolve_citations(text, book)
+        if resolved.unknown_refs:
+            print(f"[agent] [warn] cited unknown chunk(s): {resolved.unknown_refs}")
+
+        result.answer        = resolved.text
+        result.raw_answer    = resolved.raw_text
+        result.chunks        = list(book.chunks)
+        result.cited_sources = resolved.cited_sources
+        result.cited_chunks  = resolved.cited_chunks
+        result.cost_usd      = round(cost, 6) if priced else None
+        return result
 
 
 # ── Pretty printer ─────────────────────────────────────────────────────────────
 
-def print_answer(question: str, answer: str) -> None:
+def print_answer(result: AgentResult, show_chunks: bool = False) -> None:
     width = 64
     print(f"\n{'─' * width}")
-    print(f"  Q: {question}")
+    print(f"  Q: {result.question}")
     print(f"{'─' * width}")
-    print(f"\n  {answer}\n")
+
+    if show_chunks and result.chunks:
+        print(f"\n  Retrieved {len(result.chunks)} chunk(s):\n")
+        for i, c in enumerate(result.chunks, 1):
+            cited = "  ← cited" if i in result.cited_chunks else ""
+            print(f"  [{i}] score={c.score:.3f}  {c.etf_isin} | {c.doc_type} | {c.year} | "
+                  f"{c.section_heading or '—'} | {c.block_type}{cited}")
+            preview = c.text[:150].replace("\n", " ")
+            print(f"      {preview}{'…' if len(c.text) > 150 else ''}\n")
+        print(f"{'─' * width}")
+
+    print(f"\n  {result.answer}\n")
+
+    if result.cited_sources:
+        print("  Sources:")
+        for s in result.cited_sources:
+            fund = get_fund(s.etf_isin)
+            name = fund.name if fund else s.etf_isin
+            print(f"    • {name} ({s.etf_isin}) | {s.doc_type} | {s.year}")
     print(f"{'─' * width}\n")
 
 
-def print_cost(before: tuple) -> None:
-    """Print the tokens and estimated cost spent since the `before` snapshot."""
-    usage0, cost0 = before
-    u = SESSION.usage
-    print(f"  [cost] in={u.input_tokens - usage0.input_tokens} "
-          f"out={u.output_tokens - usage0.output_tokens} "
-          f"cache_read={u.cache_read_tokens - usage0.cache_read_tokens} "
-          f"| est. ${SESSION.cost_usd - cost0:.5f}\n")
+def print_cost(result: AgentResult) -> None:
+    u = result.usage
+    cost = f"${result.cost_usd:.5f}" if result.cost_usd is not None else "unknown"
+    print(f"  [cost] {result.provider}/{result.model}  {result.iterations} call(s)  "
+          f"in={u.input_tokens} out={u.output_tokens} cache_read={u.cache_read_tokens} "
+          f"| est. {cost}\n")
 
 
-def ask_agent(agent: Agent, question: str, show_cost: bool = False) -> None:
-    before = SESSION.snapshot()
-    answer = agent.run(question)
-    print_answer(question, answer)
+def ask_agent(agent: Agent, question: str, show_cost: bool = False,
+              show_chunks: bool = False) -> AgentResult:
+    result = agent.run(question)
+    print_answer(result, show_chunks=show_chunks)
     if show_cost:
-        print_cost(before)
+        print_cost(result)
+    return result
 
 
 # ── Interactive loop ───────────────────────────────────────────────────────────

@@ -15,7 +15,6 @@ Usage:
                            --chunks_file /tmp/chunks.json --query_type 1
 """
 
-import re
 import json
 import argparse
 from dataclasses import dataclass, field
@@ -23,6 +22,8 @@ from pathlib import Path
 from typing import Optional
 
 from llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
+from citations import book_from_chunks, chunk_header, resolve_citations
+from citations import CITATION_PATTERN, CitedSource, parse_citations  # noqa: F401 (re-exported)
 
 try:
     from retrieve import RetrievedChunk
@@ -59,20 +60,7 @@ MAX_TOKENS       = 1024
 TEMPERATURE_FACT = 0.0   # Types 1, 2, 3 — deterministic
 TEMPERATURE_SYN  = 0.2   # Type 4 — slight variation for reasoning
 
-CITATION_PATTERN = re.compile(
-    r"\[([A-Z]{2}[A-Z0-9]{10})\s*\|\s*(\w+)\s*\|\s*(\w+)\s*\|\s*(\d{4})[^\]]*\]"
-)
-
-
 # ── Result types ───────────────────────────────────────────────────────────────
-
-@dataclass
-class CitedSource:
-    etf_isin: str
-    issuer: str
-    doc_type: str
-    year: int
-
 
 @dataclass
 class GenerationResult:
@@ -80,6 +68,8 @@ class GenerationResult:
     query_type: int
     answer: str
     cited_sources: list = field(default_factory=list)   # list[CitedSource]
+    raw_answer: str = ""                                # before [Chunk N] resolution
+    cited_chunk_ids: list = field(default_factory=list)
     chunks_used: int = 0
     provider: str = ""
     model: str = ""
@@ -95,22 +85,15 @@ class GenerationResult:
 def build_context(chunks: list) -> str:
     """
     Format retrieved chunks into a numbered CONTEXT block.
-    Each chunk gets a source header for citation.
-    Table chunks get a [TABLE] marker.
+    Each chunk gets a [Chunk N] header with its source metadata: the model cites
+    the number and resolve_citations() maps it back. Table chunks get a [TABLE] marker.
     """
     if not chunks:
         return "No relevant context found."
 
     lines = []
     for i, chunk in enumerate(chunks, 1):
-        source_header = (
-            f"[{chunk.etf_isin} | {chunk.issuer} | {chunk.doc_type} | "
-            f"{chunk.year}{' ' + chunk.quarter if chunk.quarter else ''} | "
-            f"section: {chunk.section_heading or 'unknown'}]"
-        )
-        block_marker = " [TABLE]" if chunk.block_type in ("table", "scenario") else ""
-        lines.append(f"--- Chunk {i}{block_marker} ---")
-        lines.append(source_header)
+        lines.append(chunk_header(i, chunk))
         lines.append(chunk.text)
         lines.append("")
     return "\n".join(lines).strip()
@@ -123,8 +106,9 @@ You are a financial document analyst for ETF factsheets and KIDs.
 Rules:
 - Answer ONLY from the CONTEXT provided. Never use outside knowledge.
 - Quote numbers exactly as they appear.
-- Cite every fact as [ISIN | issuer | doc_type | year], \
-e.g. [IE00B4L5Y983 | ishares | factsheet | 2023].
+- Cite every fact with the number of the chunk it comes from, e.g. \
+"The TER is 0.20% [Chunk 2]." Several chunks: [Chunk 1, 4]. \
+Only cite chunk numbers that appear in the CONTEXT.
 - Be concise and direct.
 - If the context lacks the answer, say: \
 "The provided documents do not contain sufficient information."\
@@ -137,7 +121,7 @@ def _prompt_type1(query: str, context: str) -> str:
     return (
         f"CONTEXT:\n{context}\n\n"
         f"QUESTION: {query}\n\n"
-        "Answer in 1-2 sentences. Cite the source as [ISIN | issuer | doc_type | year]."
+        "Answer in 1-2 sentences. Cite the source as [Chunk N]."
     )
 
 
@@ -146,7 +130,7 @@ def _prompt_type2(query: str, context: str) -> str:
         f"CONTEXT:\n{context}\n\n"
         f"QUESTION: {query}\n\n"
         "Compare each ETF or document in turn. "
-        "Cite each fact as [ISIN | issuer | doc_type | year]. "
+        "Cite each fact as [Chunk N]. "
         "End with a one-sentence summary of the key difference."
     )
 
@@ -156,7 +140,7 @@ def _prompt_type3(query: str, context: str) -> str:
         f"CONTEXT:\n{context}\n\n"
         f"QUESTION: {query}\n\n"
         "Present findings in chronological order. "
-        "Cite each year's value as [ISIN | issuer | doc_type | year]. "
+        "Cite each year's value as [Chunk N]. "
         "State whether the value changed and by how much."
     )
 
@@ -167,7 +151,7 @@ def _prompt_type4(query: str, context: str) -> str:
         f"QUESTION: {query}\n\n"
         "Reason across all context chunks. Cover: costs (TER/OCF or ongoing costs), "
         "replication method, and risk profile (SRI if available). "
-        "Cite every fact as [ISIN | issuer | doc_type | year]. "
+        "Cite every fact as [Chunk N]. "
         "Conclude with a clear evidence-based answer."
     )
 
@@ -178,26 +162,6 @@ PROMPT_BUILDERS = {
     3: _prompt_type3,
     4: _prompt_type4,
 }
-
-
-# ── Citation parser ────────────────────────────────────────────────────────────
-
-def parse_citations(answer: str) -> list:
-    """Extract [ISIN | issuer | doc_type | year] citations from answer text."""
-    seen = set()
-    sources = []
-    for match in CITATION_PATTERN.finditer(answer):
-        isin, issuer, doc_type, year = match.groups()
-        key = (isin.upper(), issuer.lower(), doc_type.lower(), int(year))
-        if key not in seen:
-            seen.add(key)
-            sources.append(CitedSource(
-                etf_isin=isin.upper(),
-                issuer=issuer.lower(),
-                doc_type=doc_type.lower(),
-                year=int(year),
-            ))
-    return sources
 
 
 # ── Generator ─────────────────────────────────────────────────────────────────
@@ -245,15 +209,21 @@ class Generator:
             max_tokens=MAX_TOKENS,
         )
 
-        answer_text = response.text
         if response.stop_reason == "max_tokens":
             print(f"[generate] [warn] answer truncated at max_tokens={MAX_TOKENS}")
+
+        book     = book_from_chunks(chunks)
+        resolved = resolve_citations(response.text, book)
+        if resolved.unknown_refs:
+            print(f"[generate] [warn] cited unknown chunk(s): {resolved.unknown_refs}")
 
         return GenerationResult(
             query=query,
             query_type=query_type,
-            answer=answer_text,
-            cited_sources=parse_citations(answer_text),
+            answer=resolved.text,
+            raw_answer=resolved.raw_text,
+            cited_sources=resolved.cited_sources,
+            cited_chunk_ids=[book.get(n).chunk_id for n in resolved.cited_chunks],
             chunks_used=len(chunks),
             provider=response.provider,
             model=response.model,
