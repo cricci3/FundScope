@@ -39,95 +39,134 @@ Usage:
 import json
 import argparse
 from pathlib import Path
+from typing import Optional
 
 # ── Local imports ──────────────────────────────────────────────────────────────
 from config import INDEX_PATH as DB_PATH
 from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, get_llm
-from retrieve import Retriever, route_query
+from retrieve import Retriever, RetrievedChunk
 from live_data import get_etf_live_data, format_for_prompt
-from registry import FUNDS
+from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years,
+                      resolve_isins)
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
 MAX_ITERATIONS  = 6              # safety cap on the agent loop
 MAX_TOKENS      = 1024
-K_RETRIEVE      = 6              # chunks per retrieval call
+K_SINGLE        = 6              # chunks for a single-fund search
+K_PER_ETF       = 3              # chunks per fund in comparative mode
+K_PER_DOC_TYPE  = 3              # chunks per document type in cross_doc mode
 
-KNOWN_ISINS = {isin: {"issuer": f.issuer, "name": f.name} for isin, f in FUNDS.items()}
+SEARCH_MODES = ["single", "comparative", "cross_doc"]
 
 
 # ── Tool definitions (sent to the LLM) ────────────────────────────────────────
 # These tell the LLM what tools exist and what arguments they take.
-# The LLM decides when and how to call them.
+# The LLM decides when and how to call them. ISINs, issuers, document types and
+# years are enums generated from the fund registry (metadata.json).
 
-TOOLS = [
-    ToolSpec(
-        name="search_etf_docs",
-        description=(
-            "Search the ETF document corpus (factsheets and KIDs) for information "
-            "about costs, fees, risk indicators, replication method, holdings, "
-            "performance scenarios, or any other content from the PDF documents. "
-            "Use this for questions that can be answered from the fund documents."
-        ),
-        parameters_json_schema={
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Natural language search query, e.g. 'ongoing charges iShares'",
+def _fund_list() -> str:
+    return "; ".join(f"{f.name} = {f.isin} ({f.issuer})" for f in FUNDS.values())
+
+
+def build_tools() -> list[ToolSpec]:
+    isins = all_isins()
+    live_isins = [f.isin for f in FUNDS.values() if f.yahoo_ticker]
+    return [
+        ToolSpec(
+            name="search_etf_docs",
+            description=(
+                "Search the ETF document corpus (factsheets and KIDs) for information "
+                "about costs, fees, risk indicators, replication method, index, holdings, "
+                "performance scenarios, target investors or any other content of the PDF "
+                "documents. Factsheets hold TER/ongoing charges, index, replication, "
+                "holdings and past performance; KIDs hold the Summary Risk Indicator, "
+                "recommended holding period, entry/exit/ongoing costs, performance "
+                "scenarios and the target investor. Funds: " + _fund_list() + "."
+            ),
+            parameters_json_schema={
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language search query, e.g. 'ongoing charges'. "
+                                       "Rephrase and search again if the first results "
+                                       "do not contain the answer.",
+                    },
+                    "isins": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": isins},
+                        "description": "Funds to search. Omit to search every fund.",
+                    },
+                    "issuer": {
+                        "type": "string",
+                        "enum": all_issuers(),
+                        "description": "Restrict to the funds of one issuer (alternative to isins).",
+                    },
+                    "doc_type": {
+                        "type": "string",
+                        "enum": all_doc_types(),
+                        "description": "Restrict to one document type. Omit to search both.",
+                    },
+                    "year": {
+                        "type": "integer",
+                        "enum": all_years(),
+                        "description": "Restrict to documents of one year. Omit for all years.",
+                    },
+                    "mode": {
+                        "type": "string",
+                        "enum": SEARCH_MODES,
+                        "description": (
+                            "single: best chunks for one fund (or the whole corpus); "
+                            "comparative: top chunks from EACH selected fund, so every fund "
+                            "is represented; cross_doc: top chunks from EACH document type "
+                            "(factsheet and KID) of the selected fund(s). Omit to choose "
+                            "automatically (several funds → comparative, one fund without "
+                            "doc_type → cross_doc, otherwise single)."
+                        ),
+                    },
                 },
-                "issuer": {
-                    "type": "string",
-                    "description": "Filter by fund issuer. One of: ishares, ubs. Omit to search all.",
-                    "enum": ["ishares", "ubs"],
-                },
-                "doc_type": {
-                    "type": "string",
-                    "description": "Filter by document type. One of: factsheet, kid. Omit to search both.",
-                    "enum": ["factsheet", "kid"],
-                },
+                "required": ["query"],
             },
-            "required": ["query"],
-        },
-    ),
-    ToolSpec(
-        name="get_live_data",
-        description=(
-            "Fetch real-time market data for an ETF: current price, 1-month, "
-            "3-month, and year-to-date returns, AUM, and average daily volume. "
-            "Use this for questions about recent performance, price, or liquidity. "
-            "Do NOT use this for questions about fund documents (TER, SRI, etc.)."
         ),
-        parameters_json_schema={
-            "type": "object",
-            "properties": {
-                "isin": {
-                    "type": "string",
-                    "description": (
-                        "ISIN of the ETF. "
-                        "iShares Core MSCI World = IE00B4L5Y983, "
-                        "UBS Core MSCI World = IE00BD4TXV59"
-                    ),
+        ToolSpec(
+            name="get_live_data",
+            description=(
+                "Fetch real-time market data for an ETF: current price, 1-month, "
+                "3-month, and year-to-date returns, AUM, and average daily volume. "
+                "Use this for questions about recent performance, price, or liquidity. "
+                "Do NOT use this for questions about fund documents (TER, SRI, etc.)."
+            ),
+            parameters_json_schema={
+                "type": "object",
+                "properties": {
+                    "isin": {
+                        "type": "string",
+                        "enum": live_isins,
+                        "description": "ISIN of the ETF. Funds: " + _fund_list(),
+                    },
                 },
+                "required": ["isin"],
             },
-            "required": ["isin"],
-        },
-    ),
-    ToolSpec(
-        name="list_available_etfs",
-        description=(
-            "Return a list of all ETFs available in the corpus with their ISINs, "
-            "issuers, and names. Call this if the user asks what funds are available "
-            "or if you are unsure which ISIN to use."
         ),
-        parameters_json_schema={
-            "type": "object",
-            "properties": {},
-            "required": [],
-        },
-    ),
-]
+        ToolSpec(
+            name="list_available_etfs",
+            description=(
+                "Return a list of all ETFs available in the corpus with their ISINs, "
+                "issuers, names and available documents. Call this if the user asks what "
+                "funds are available or if you are unsure which ISIN to use."
+            ),
+            parameters_json_schema={
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        ),
+    ]
+
+
+TOOLS = build_tools()
 
 
 # ── Tool executor ──────────────────────────────────────────────────────────────
@@ -151,41 +190,60 @@ class ToolExecutor:
         else:
             raise ValueError(f"Unknown tool: {name}")
 
-    def _search_etf_docs(
+    def search(
         self,
         query: str,
-        issuer: str = None,
-        doc_type: str = None,
-    ) -> str:
-        """Run semantic search and return formatted chunks as a string."""
-        # Build metadata filter from agent-supplied args
-        filter_hint = {}
-        if doc_type:
-            filter_hint["doc_type"] = doc_type
+        isins: Optional[list[str]] = None,
+        issuer: Optional[str] = None,
+        doc_type: Optional[str] = None,
+        year: Optional[int] = None,
+        mode: Optional[str] = None,
+    ) -> list[RetrievedChunk]:
+        """Resolve the tool arguments into a retrieval call (raises ValueError on bad args)."""
+        isin_list = resolve_isins(isins, issuer)
+        if not isin_list:
+            raise ValueError(f"No fund matches isins={isins} issuer={issuer!r}.")
+        if mode is not None and mode not in SEARCH_MODES:
+            raise ValueError(f"mode must be one of {SEARCH_MODES}, got {mode!r}")
+        if mode is None:
+            if len(isin_list) > 1:
+                mode = "comparative"
+            elif doc_type is None:
+                mode = "cross_doc"
+            else:
+                mode = "single"
 
-        # Resolve ISINs from issuer filter
-        if issuer:
-            isin_list = [
-                isin for isin, meta in KNOWN_ISINS.items()
-                if meta["issuer"] == issuer
-            ]
-        else:
-            isin_list = list(KNOWN_ISINS.keys())
+        filters = {"doc_type": doc_type, "year": year}
 
-        # Use comparative mode when searching across multiple ETFs
-        mode = "comparative" if len(isin_list) > 1 else "single"
+        if mode == "cross_doc":
+            doc_types = [doc_type] if doc_type else all_doc_types()
+            year_filter = {"year": year} if year else {}
+            chunks = []
+            for isin in isin_list:
+                chunks.extend(self._retriever.cross_document(
+                    query=query, etf_isin=isin, doc_types=doc_types,
+                    filters=year_filter, k_per_doc_type=K_PER_DOC_TYPE,
+                ))
+            return chunks
+
+        if mode == "comparative" and len(isin_list) > 1:
+            return self._retriever.comparative(
+                query=query, isin_list=isin_list, filters=filters, k_per_etf=K_PER_ETF,
+            )
+
+        # single: one fund, or every fund when no restriction was given
         if len(isin_list) == 1:
-            filter_hint["etf_isin"] = isin_list[0]
+            filters["etf_isin"] = isin_list[0]
+        elif len(isin_list) < len(FUNDS):
+            # a subset of funds cannot be expressed as one equality filter
+            return self._retriever.comparative(
+                query=query, isin_list=isin_list, filters=filters, k_per_etf=K_PER_ETF,
+            )
+        return self._retriever.single(query=query, filters=filters, k=K_SINGLE)
 
-        chunks = route_query(
-            retriever=self._retriever,
-            query=query,
-            metadata_filter_hint=filter_hint,
-            isin_list=isin_list,
-            mode=mode,
-            k=K_RETRIEVE,
-        )
-
+    def _search_etf_docs(self, query: str, **kwargs) -> str:
+        """Run semantic search and return formatted chunks as a string."""
+        chunks = self.search(query, **kwargs)
         if not chunks:
             return "No relevant document chunks found for this query."
 
@@ -207,8 +265,8 @@ class ToolExecutor:
 
     def _list_available_etfs(self) -> str:
         lines = ["ETFs available in the corpus:"]
-        for isin, meta in KNOWN_ISINS.items():
-            lines.append(f"  - {meta['name']} | ISIN: {isin} | Issuer: {meta['issuer']}")
+        for fund in FUNDS.values():
+            lines.append(f"  - {fund.describe()}")
         return "\n".join(lines)
 
 
@@ -367,10 +425,7 @@ def interactive_loop(agent: Agent, show_cost: bool = False) -> None:
         elif cmd == "help":
             print(HELP_TEXT)
         elif cmd == "funds":
-            funds = "\n".join(
-                f"  • {meta['name']}  ({isin})  [{meta['issuer']}]"
-                for isin, meta in KNOWN_ISINS.items()
-            )
+            funds = "\n".join(f"  • {f.describe()}" for f in FUNDS.values())
             print(f"\n  ETFs in corpus:\n{funds}\n")
         elif cmd == "calls":
             agent._show_calls = not agent._show_calls

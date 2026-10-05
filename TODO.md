@@ -213,7 +213,7 @@ Le correzioni allo scorer (3.1–3.3) sono solo codice e si possono verificare s
 
 ## Fase 4 — Agent come unico entrypoint
 
-- [ ] **4.1 Tool `search_etf_docs` più espressivo** — parametri `isins: list[str]`, `mode: single|comparative|cross_doc`, `year`; enum di issuer/ISIN generati dal registro (4.3), non hard-coded.
+- [x] **4.1 Tool `search_etf_docs` più espressivo** — parametri `isins: list[str]`, `mode: single|comparative|cross_doc`, `year`; enum di issuer/ISIN generati dal registro (4.3), non hard-coded.
 
 - [ ] **4.2 Memoria conversazionale** — history mantenuta tra domande in modalità interattiva (comando `reset`), troncata a N turni.
 
