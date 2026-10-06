@@ -591,6 +591,22 @@ def build_key_facts_chunk(metadata: DocumentMetadata) -> Chunk:
     )
 
 
+# ── Glossary pages ─────────────────────────────────────────────────────────────
+# Some factsheets end with the issuer's standard glossary ("UBS AM standard
+# glossary": "Physical replication: In physical replication, an ETF invests…").
+# Its definitions match questions like "replication method" better than the
+# fund's own facts and push them out of the top-k, so glossary pages are skipped.
+
+_DEFINITION_RE = re.compile(r"(?:^|\s)[A-Z][a-z]+(?: [a-z()]+){0,3}: [A-Z]")
+
+
+def is_glossary_page(text: str, previous_was_glossary: bool = False) -> bool:
+    """A page announcing a glossary at its top, or one continuing it with definitions."""
+    if "glossary" in text[:300].lower():
+        return True
+    return previous_was_glossary and len(_DEFINITION_RE.findall(text)) >= 5
+
+
 # ── Main ingestion pipeline ────────────────────────────────────────────────────
 
 def ingest_document(
@@ -646,7 +662,13 @@ def ingest_document(
         # Page-by-page extraction
         current_heading: Optional[str] = None
         global_offset = 0
+        in_glossary = False
         for page_num, page in enumerate(pdf.pages, start=1):
+            page_text = page.extract_text() or ""
+            in_glossary = is_glossary_page(page_text, in_glossary)
+            if in_glossary:
+                print(f"  [skip] page {page_num}: generic glossary")
+                continue
             page_chunks, current_heading, global_offset = extract_page_blocks(
                 page, page_num, metadata, current_heading, global_offset
             )

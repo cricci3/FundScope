@@ -70,9 +70,11 @@ FINAL_CALL_NOTICE = (
 )
 MAX_TOKENS      = 1024
 # Chunks are ~1000 characters (config.CHUNK_SIZES), so a few per search suffice
-K_SINGLE        = 4              # chunks for a single-fund search
-K_PER_ETF       = 2              # chunks per fund in comparative mode
+K_SINGLE        = 5              # chunks for a single-fund search
+K_PER_ETF       = 3              # chunks per fund in comparative mode
 K_PER_DOC_TYPE  = 2              # chunks per document type in cross_doc mode
+KEY_FACTS_FIRST = True           # prepend each searched document's key-facts chunk
+MAX_KEY_FACTS   = 4              # ... unless the search spans more documents than this
 
 SEARCH_MODES = ["single", "comparative", "cross_doc"]
 
@@ -190,8 +192,9 @@ TOOLS = build_tools()
 # Returns a plain string — the LLM will read this as the tool result.
 
 class ToolExecutor:
-    def __init__(self, retriever: Retriever):
+    def __init__(self, retriever: Retriever, key_facts_first: bool = KEY_FACTS_FIRST):
         self._retriever = retriever
+        self.key_facts_first = key_facts_first
         self.new_question()
 
     def new_question(self) -> None:
@@ -235,6 +238,22 @@ class ToolExecutor:
             else:
                 mode = "single"
 
+        chunks = self._semantic_search(query, isin_list, doc_type, year, mode)
+        if not self.key_facts_first:
+            return chunks
+        # The key-facts chunk of every searched document comes first: it holds the
+        # values most questions ask for (TER, replication, SRI, costs), and short
+        # queries like "replication method" often rank it below generic prose
+        doc_types = [doc_type] if doc_type else all_doc_types()
+        if len(isin_list) * len(doc_types) > MAX_KEY_FACTS:
+            return chunks           # a corpus-wide search: too many documents to summarise
+        facts = [kf for isin in isin_list for dt in doc_types
+                 if (kf := self._retriever.key_facts(isin, dt, year)) is not None]
+        seen = {c.chunk_id for c in facts}
+        return facts + [c for c in chunks if c.chunk_id not in seen]
+
+    def _semantic_search(self, query: str, isin_list: list[str], doc_type: Optional[str],
+                         year: Optional[int], mode: str) -> list[RetrievedChunk]:
         filters = {"doc_type": doc_type, "year": year}
 
         if mode == "cross_doc":

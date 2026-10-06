@@ -234,12 +234,14 @@ def apply_min_score(chunks: list[RetrievedChunk], min_score: float,
     Split chunks into (kept, dropped): a chunk is dropped when its cosine
     similarity is below `min_score` — unless it contains a token of the query
     that has a digit (an ISIN, a figure), an exact match that embeddings rank poorly.
+    Key-facts chunks are always kept: they are the document's summary, not a match.
     """
     identifiers = {t for t in tokenize(query) if any(ch.isdigit() for ch in t)}
     kept, dropped = [], []
     for c in chunks:
         exact = bool(identifiers & set(tokenize(c.text)))
-        (kept if c.score >= min_score or exact else dropped).append(c)
+        keep = c.score >= min_score or exact or c.block_type == "key_facts"
+        (kept if keep else dropped).append(c)
     return kept, dropped
 
 
@@ -436,7 +438,7 @@ class Retriever:
 
         return _sort_by_score(_deduplicate(all_chunks))
 
-    def key_facts(self, etf_isin: str, doc_type: str, year: int) -> Optional[RetrievedChunk]:
+    def key_facts(self, etf_isin: str, doc_type: str, year: Optional[int] = None) -> Optional[RetrievedChunk]:
         """
         Fetch the key_facts summary chunk for a specific ETF document.
         This is a direct lookup by metadata — no embedding needed.
