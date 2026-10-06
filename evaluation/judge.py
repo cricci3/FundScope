@@ -111,6 +111,11 @@ def _rubric_texts(items: list) -> list:
     return [i["item"] if isinstance(i, dict) else str(i) for i in items or []]
 
 
+def _shared_context(entry: dict) -> bool:
+    """Full-context runs (pipeline.py --engine full) show every question the same documents."""
+    return entry.get("engine") == "full"
+
+
 def build_prompt(question: dict, entry: dict) -> str:
     rubric = question.get("answer_rubric")
     if rubric:
@@ -123,11 +128,13 @@ def build_prompt(question: dict, entry: dict) -> str:
     else:
         reference = f"EXPECTED ANSWER (reference):\n{question.get('expected_answer')}"
 
+    context = ("RETRIEVED CONTEXT: the full documents in the system prompt." if _shared_context(entry)
+               else f"RETRIEVED CONTEXT:\n{_format_context(entry)}")
     return (
         f"QUESTION:\n{question['question']}\n\n"
         f"{reference}\n\n"
         f"{_format_reference_data(entry)}"
-        f"RETRIEVED CONTEXT:\n{_format_context(entry)}\n\n"
+        f"{context}\n\n"
         f"ASSISTANT ANSWER:\n{entry.get('generated_answer', '')}"
     )
 
@@ -161,9 +168,14 @@ def judge_question(llm: LLMClient, question: dict, entry: dict,
     if entry.get("generated_answer", "").startswith("ERROR:") or not entry.get("generated_answer"):
         return {"error": "no answer to judge", "model": llm.model, "cost_usd": 0.0}
 
+    # The same documents for every question: in the system prompt, which the
+    # backend caches, they are paid in full once per run instead of per question
+    system = SYSTEM_PROMPT
+    if _shared_context(entry):
+        system += f"\n\nRETRIEVED CONTEXT (full documents):\n{_format_context(entry)}"
     resp = llm.chat(
         [Message("user", build_prompt(question, entry))],
-        system=SYSTEM_PROMPT,
+        system=system,
         temperature=0.0,
         max_tokens=max_tokens,
         response_schema=JUDGE_SCHEMA,

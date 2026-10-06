@@ -2,12 +2,14 @@
 pipeline.py — End-to-end query handler
 ETF RAG Project — Phase 4
 
-Two engines (--engine):
+Three engines (--engine):
   agent (default) — the tool-calling agent of agent.py: it gets only the
                     question and decides itself what to search.
   rag             — retrieve.py → generate.py: retrieval routed by the
                     ground-truth query_type / ISINs / metadata hints.
-Both return the same structured result, so evaluate.py scores either.
+  full            — fullcontext.py: no retrieval, every document in the
+                    (cached) prompt; measures what retrieval adds.
+All return the same structured result, so evaluate.py scores any of them.
 
 Batch output (--run_eval) is what evaluate.py expects:
     {
@@ -73,7 +75,7 @@ from retrieve import Retriever, RetrievedChunk, route_query
 from generate import Generator, GenerationResult
 from llm import PROVIDERS, SESSION, BudgetExceededError
 
-ENGINES = ["agent", "rag"]
+ENGINES = ["agent", "rag", "full"]
 
 
 # ── Config defaults ────────────────────────────────────────────────────────────
@@ -241,8 +243,9 @@ def run_agent_query(
     query_type: int = 1,
 ) -> PipelineResult:
     """
-    Answer one question with the tool-calling agent (agent.py). The agent gets
-    only the question: no query type, ISINs or filters from the ground truth.
+    Answer one question with the tool-calling agent (agent.py), or with the
+    full-context engine (fullcontext.py, same interface). Both get only the
+    question: no query type, ISINs or filters from the ground truth.
     """
     result = agent.run(question)
     u = result.usage
@@ -263,7 +266,7 @@ def run_agent_query(
         cache_read_tokens=u.cache_read_tokens,
         cache_write_tokens=u.cache_write_tokens,
         cost_usd=result.cost_usd,
-        engine="agent",
+        engine=getattr(agent, "engine", "agent"),
         tool_calls=result.tool_calls,
         iterations=result.iterations,
         reference_data=agent.reference_data,
@@ -296,7 +299,7 @@ def default_output_path(answerer, engine: str = "rag") -> Path:
     """
     stamp  = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     model  = answerer.model.replace("/", "-").replace(":", "-")
-    suffix = "_agent" if engine == "agent" else ""
+    suffix = "" if engine == "rag" else f"_{engine}"
     return EVAL_DIR / "runs" / f"{stamp}_{model}{suffix}.json"
 
 
@@ -358,7 +361,7 @@ def run_eval_batch(
     questions = select_questions(gt["questions"], qids, limit)   # not _parked_type3
 
     answerer = agent if agent is not None else generator
-    engine   = "agent" if agent is not None else "rag"
+    engine   = getattr(agent, "engine", "agent") if agent is not None else "rag"
 
     results: list[PipelineResult] = []
     total   = len(questions)
@@ -393,7 +396,7 @@ def run_eval_batch(
                     )
                 results.append(result)
                 cost = f"${result.cost_usd:.5f}" if result.cost_usd is not None else "n/a"
-                calls = f", {len(result.tool_calls)} tool call(s)" if agent is not None else ""
+                calls = f", {len(result.tool_calls)} tool call(s)" if engine == "agent" else ""
                 print(f"  ✓ {len(result.retrieved_chunks)} chunks retrieved{calls}, "
                       f"{result.input_tokens}+{result.output_tokens} tokens, {cost}")
             except BudgetExceededError:
@@ -457,7 +460,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p.add_argument("--engine", default="agent", choices=ENGINES,
                    help="agent: tool-calling agent, sees only the question (default); "
-                        "rag: fixed retrieval routed by query_type / ISINs / filters + Generator")
+                        "rag: fixed retrieval routed by query_type / ISINs / filters + Generator; "
+                        "full: no retrieval, every document in the (cached) prompt")
 
     # Single query options (--engine rag only, except --query_type which is
     # just recorded for the agent)
@@ -493,9 +497,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main():
     args = build_parser().parse_args()
 
-    retriever = Retriever(db_path=args.db_path)
+    retriever = Retriever(db_path=args.db_path) if args.engine != "full" else None
     generator = agent = None
-    if args.engine == "agent":
+    if args.engine == "full":
+        from fullcontext import FullContextAnswerer
+        agent = FullContextAnswerer(provider=args.provider, model=args.model)
+    elif args.engine == "agent":
         from agent import Agent
         # history_turns=0: every question is answered independently
         agent = Agent(retriever, provider=args.provider, model=args.model, history_turns=0)
