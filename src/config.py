@@ -20,7 +20,45 @@ EVAL_DIR       = PROJECT_ROOT / "evaluation"
 # ── Vector store ───────────────────────────────────────────────────────────────
 
 COLLECTION_NAME = "etf_chunks"
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"   # 384d, ~80 MB, CPU-native
+# Task 5.2: multilingual (Italian questions over English documents), 768d,
+# ~1.1 GB, 512-token window; needs the "query: "/"passage: " prefixes below.
+# Retrieval-only comparison (chunk value MRR, no metadata filters): MiniLM 0.66
+# (Italian 0.43), multilingual-e5-small 0.68 (0.53), multilingual-e5-base 0.74 (0.78).
+EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
+
+# Models trained with instruction prefixes: (query prefix, passage prefix).
+# The model name is stored in the collection metadata (embed.py) and
+# retrieve.py refuses to query an index built with a different model.
+EMBEDDING_PREFIXES = {
+    "intfloat/multilingual-e5-small": ("query: ", "passage: "),
+    "intfloat/multilingual-e5-base":  ("query: ", "passage: "),
+}
+
+
+def embedding_prefixes(model_name: str) -> tuple[str, str]:
+    return EMBEDDING_PREFIXES.get(model_name, ("", ""))
+
+
+# Hybrid retrieval (retrieve.py): BM25 + vector rankings fused with RRF
+HYBRID_SEARCH = True
+
+# Minimum cosine similarity for a chunk to reach the model (agent.py drops the
+# rest and says so). Similarity ranges differ per model, so it is per model;
+# unknown models keep every chunk.
+# Task 5.4 calibration (top-20 hits per ground-truth question): chunks holding
+# an expected value never scored below 0.768 with e5-base, while off-topic
+# questions ("weather in Rome") top out at 0.756. e5 similarities are compressed
+# (unrelated fund chunks still score ~0.76-0.80), so this only drops clear misses.
+MIN_SIMILARITY = {
+    "intfloat/multilingual-e5-base":  0.76,
+    "intfloat/multilingual-e5-small": 0.76,
+    "all-MiniLM-L6-v2":               0.05,
+}
+
+
+def min_similarity(model_name: str) -> float:
+    return MIN_SIMILARITY.get(model_name, 0.0)
+
 
 # Chunk size / overlap in characters, per doc type (used by ingest.py).
 # Task 5.1 sweep (retrieval only, chunk value recall): 250/400 → 0.71,

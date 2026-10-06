@@ -3,7 +3,7 @@ embed.py — Embedding + ChromaDB indexing pipeline
 ETF RAG Project — Phase 3
 
 Loads processed chunk JSON files from data/processed/, embeds each chunk
-using sentence-transformers (all-MiniLM-L6-v2, CPU-native), and stores
+using sentence-transformers (config.EMBEDDING_MODEL, CPU-native), and stores
 vectors + metadata in a persisted ChromaDB collection.
 
 Design decisions:
@@ -47,7 +47,8 @@ try:
 except ImportError:
     raise ImportError("pip install sentence-transformers")
 
-from config import COLLECTION_NAME, EMBEDDING_MODEL, INDEX_PATH, DATA_PROCESSED, METADATA_PATH
+from config import (COLLECTION_NAME, EMBEDDING_MODEL, INDEX_PATH, DATA_PROCESSED, METADATA_PATH,
+                    embedding_prefixes)
 from ingest import load_config, metadata_from_config_entry, build_output_stem, compute_content_hash
 
 
@@ -161,10 +162,13 @@ def load_chunks(input_dir: Path, config_path: Path = METADATA_PATH) -> list[dict
 def get_collection(
     db_path: Path,
     rebuild: bool = False,
+    model_name: str = EMBEDDING_MODEL,
 ) -> "chromadb.Collection":
     """
     Open (or create) a persistent ChromaDB collection.
     If rebuild=True, the existing collection is deleted first.
+    The embedding model is recorded in the collection metadata; adding chunks
+    embedded with another model to an existing index is refused.
     """
     db_path.mkdir(parents=True, exist_ok=True)
     client = chromadb.PersistentClient(path=str(db_path))
@@ -181,8 +185,14 @@ def get_collection(
         # ChromaDB will use its own internal embedding if we pass None here,
         # but we compute embeddings ourselves for full control.
         # embedding_function=None means we supply vectors directly.
-        metadata={"hnsw:space": "cosine"},  # cosine similarity
+        metadata={"hnsw:space": "cosine", "embedding_model": model_name},
     )
+    indexed_with = (collection.metadata or {}).get("embedding_model")
+    if indexed_with != model_name:
+        raise SystemExit(
+            f"  The index was built with embedding model {indexed_with!r}, not {model_name!r}.\n"
+            f"  Rebuild it: python src/embed.py --rebuild --model {model_name}"
+        )
     return collection
 
 
@@ -191,7 +201,8 @@ def get_collection(
 def load_model(model_name: str = EMBEDDING_MODEL) -> SentenceTransformer:
     print(f"\n  Loading embedding model: {model_name}")
     model = SentenceTransformer(model_name)
-    print(f"  Embedding dimension: {model.get_sentence_embedding_dimension()}")
+    print(f"  Embedding dimension: {model.get_embedding_dimension()}  "
+          f"(max {model.max_seq_length} tokens per chunk)")
     return model
 
 
@@ -282,7 +293,9 @@ def index_chunks(
         texts     = [c["text"]      for c in batch]
         metadatas = [_extract_metadata(c) for c in batch]
 
-        vectors = embed_texts(texts, model, batch_size=batch_size, show_progress=False)
+        passage_prefix = embedding_prefixes(collection.metadata["embedding_model"])[1]
+        vectors = embed_texts([passage_prefix + t for t in texts], model,
+                              batch_size=batch_size, show_progress=False)
 
         collection.add(
             ids=ids,
@@ -372,7 +385,7 @@ def main():
     print(f"[embed] Rebuild: {args.rebuild}")
 
     chunks     = load_chunks(args.input_dir, args.config)
-    collection = get_collection(args.db_path, rebuild=args.rebuild)
+    collection = get_collection(args.db_path, rebuild=args.rebuild, model_name=args.model)
     model      = load_model(args.model)
 
     summary = index_chunks(

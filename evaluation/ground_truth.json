@@ -10,7 +10,8 @@
     "the list of concepts a good answer must cover.",
     "difficulty: easy | medium | hard — used to slice eval results.",
     "Type 3 (temporal) is parked — requires multi-year corpus (Phase 2).",
-    "T2_006–T2_009 replace T3_001–T3_004: cross-document-type queries (factsheet vs KID, same ETF and year)."
+    "T2_006–T2_009 replace T3_001–T3_004: cross-document-type queries (factsheet vs KID, same ETF and year).",
+    "language: questions without it are in English; T1_008–T1_010 and T2_010–T2_011 (task 5.2) are in Italian over the English documents and come last, so --limit N on the first 17 is unchanged."
   ],
 
   "questions": [
@@ -464,6 +465,133 @@
         {"etf_isin": "IE00BD4TXV59", "doc_type": "kid",       "year": 2026}
       ],
       "metadata_filter_hint": {"category": "MSCI World"}
+    },
+
+    {
+      "qid": "T1_008",
+      "language": "it",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "question": "Qual è il costo annuo (TER) dell'iShares Core MSCI World UCITS ETF?",
+      "expected_answer": "0,20% (Total Expense Ratio del factsheet)",
+      "expected_values": ["0.20%"],
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts",
+          "note": "Total Expense Ratio in Product Information table"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T1_009",
+      "language": "it",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "question": "Qual è l'indicatore sintetico di rischio (SRI) riportato nel KID dell'ETF UBS Core MSCI World?",
+      "expected_answer": "4 su 7 (classe di rischio media)",
+      "expected_values": [["4 su 7", "4/7", "4 out of 7", "classe di rischio 4", "livello 4", "sri: 4", "sri di 4", "sri è 4", "pari a 4"]],
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the risks and what could i get in return",
+          "note": "We have classified this product as 4 out of 7"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00BD4TXV59", "doc_type": "kid"}
+    },
+
+    {
+      "qid": "T1_010",
+      "language": "it",
+      "query_type": 1,
+      "query_type_label": "factual",
+      "difficulty": "easy",
+      "question": "Per quanto tempo il KID consiglia di detenere l'iShares Core MSCI World UCITS ETF?",
+      "expected_answer": "5 anni (periodo di detenzione raccomandato)",
+      "expected_values": [["5 anni", "cinque anni", "5 years"]],
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "how long should i hold it",
+          "note": "Recommended holding period : 5 years"
+        }
+      ],
+      "metadata_filter_hint": {"etf_isin": "IE00B4L5Y983", "doc_type": "kid"}
+    },
+
+    {
+      "qid": "T2_010",
+      "language": "it",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "question": "Quale dei due ETF MSCI World (iShares e UBS) replica l'indice in modo completo e quale usa una replica ottimizzata?",
+      "expected_answer": "UBS (IE00BD4TXV59): replica fisica completa (Physical, Full replicated); iShares (IE00B4L5Y983): replica fisica ottimizzata (Methodology: Optimised)",
+      "expected_values": {"IE00B4L5Y983": [["ottimizz", "optimis", "optimiz"]], "IE00BD4TXV59": [["completa", "integrale", "full replic", "fully replic"]]},
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "key facts"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "factsheet",
+          "section_heading": "Fund description, Replication methodology row"
+        }
+      ],
+      "metadata_filter_hint": {"category": "MSCI World", "doc_type": "factsheet"}
+    },
+
+    {
+      "qid": "T2_011",
+      "language": "it",
+      "query_type": 2,
+      "query_type_label": "comparative",
+      "difficulty": "medium",
+      "question": "Confronta i costi correnti annui dei due ETF MSCI World secondo i rispettivi KID.",
+      "expected_answer": "iShares (IE00B4L5Y983) 0,20% l'anno; UBS (IE00BD4TXV59) 0,1% l'anno (commissioni di gestione e altri costi amministrativi o di esercizio)",
+      "expected_values": {"IE00B4L5Y983": ["0.20%"], "IE00BD4TXV59": ["0.10%"]},
+      "answer_rubric": null,
+      "sources": [
+        {
+          "etf_isin": "IE00B4L5Y983",
+          "issuer": "ishares",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the costs"
+        },
+        {
+          "etf_isin": "IE00BD4TXV59",
+          "issuer": "ubs",
+          "year": 2026,
+          "doc_type": "kid",
+          "section_heading": "what are the costs"
+        }
+      ],
+      "metadata_filter_hint": {"category": "MSCI World", "doc_type": "kid"}
     }
   ],
 

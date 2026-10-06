@@ -115,6 +115,7 @@ class QuestionEval:
     faithfulness: FaithfulnessResult
     attribution: AttributionResult
     judge: Optional[dict] = None              # --judge llm only
+    language: str = "en"                      # ground_truth "language" (default English)
 
 
 # ── Source matching ────────────────────────────────────────────────────────────
@@ -517,7 +518,10 @@ def aggregate(results: list[QuestionEval]) -> dict:
                for qt in (1, 2, 3, 4) if any(r.query_type == qt for r in results)}
     by_difficulty = {d: _metrics([r for r in results if r.difficulty == d])
                      for d in ("easy", "medium", "hard") if any(r.difficulty == d for r in results)}
-    return {"overall": _metrics(results), "by_query_type": by_type, "by_difficulty": by_difficulty}
+    by_language = {lang: _metrics([r for r in results if r.language == lang])
+                   for lang in sorted({r.language for r in results})}
+    return {"overall": _metrics(results), "by_query_type": by_type,
+            "by_difficulty": by_difficulty, "by_language": by_language}
 
 
 # ── Main eval loop ─────────────────────────────────────────────────────────────
@@ -614,6 +618,7 @@ def run_evaluation(
             faithfulness=faithfulness,
             attribution=attribution,
             judge=verdict,
+            language=question.get("language", "en"),
         ))
 
     if missing_qids:
@@ -664,6 +669,12 @@ def print_summary(summary: dict) -> None:
         print(f"  {diff:6s}  (n={s['n']}):  P={_pct(s['retrieval_precision_mean'])}  "
               f"R={_pct(s['retrieval_recall_mean'])}{judge}")
 
+    print("\n  By Language")
+    for lang, s in summary.get("by_language", {}).items():
+        judge = f"  Judge={_pct(s.get('judge_pass_pct'))}" if "judge_n" in s else ""
+        print(f"  {lang:6s}  (n={s['n']}):  R={_pct(s['retrieval_recall_mean'])}  "
+              f"ValueR={_pct(s['chunk_value_recall_mean'])}{judge}")
+
     print("═" * 56 + "\n")
 
 
@@ -683,7 +694,7 @@ def print_run_cost(run: dict) -> None:
 
 def _flatten(summary: dict) -> dict:
     flat = {f"overall.{k}": v for k, v in summary.get("overall", {}).items()}
-    for group in ("by_query_type", "by_difficulty"):
+    for group in ("by_query_type", "by_difficulty", "by_language"):
         for label, metrics in summary.get(group, {}).items():
             flat.update({f"{label}.{k}": v for k, v in metrics.items()})
     return flat
@@ -793,6 +804,8 @@ def main():
             "judge_status":     judge_status,
             "judge_cost_usd":   judge_cost,
             "embedding_model":  config.EMBEDDING_MODEL,
+            "hybrid_search":    config.HYBRID_SEARCH,
+            "min_similarity":   config.min_similarity(config.EMBEDDING_MODEL),
             "chunk_sizes":      config.CHUNK_SIZES,
             "chunk_overlaps":   config.CHUNK_OVERLAPS,
             "subset":           {"qids": args.qids, "limit": args.limit},
@@ -807,6 +820,7 @@ def main():
                 "query_type":       r.query_type,
                 "query_type_label": r.query_type_label,
                 "difficulty":       r.difficulty,
+                "language":         r.language,
                 "retrieval":        asdict(r.retrieval),
                 "faithfulness":     asdict(r.faithfulness),
                 "attribution":      asdict(r.attribution),

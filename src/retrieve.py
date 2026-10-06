@@ -19,6 +19,13 @@ Three retrieval modes, matching the four query types in ground_truth.json:
 All three modes return a list of RetrievedChunk objects with score,
 source attribution, and the full chunk text ready for the LLM prompt.
 
+Each search is hybrid by default (config.HYBRID_SEARCH): the vector ranking
+and a BM25 ranking of the same chunks are fused with Reciprocal Rank Fusion,
+which helps on ISINs, acronyms (TER, OCF, SRI) and figures. `score` stays the
+cosine similarity; apply_min_score() drops chunks below the per-model
+threshold (config.MIN_SIMILARITY) — the agent uses it and tells the model.
+The index records its embedding model; querying it with another model fails.
+
 Usage (Python API — called from pipeline.py):
     from retrieve import Retriever
 
@@ -59,11 +66,14 @@ Install:
     pip install chromadb sentence-transformers
 """
 
+import re
 import json
 import argparse
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional, Union
+
+import numpy as np
 
 try:
     import chromadb
@@ -71,12 +81,18 @@ except ImportError:
     raise ImportError("pip install chromadb")
 
 try:
+    from rank_bm25 import BM25Okapi
+except ImportError:
+    raise ImportError("uv add rank_bm25")
+
+try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
     raise ImportError("pip install sentence-transformers")
 
 
-from config import COLLECTION_NAME, EMBEDDING_MODEL, INDEX_PATH
+from config import (COLLECTION_NAME, EMBEDDING_MODEL, HYBRID_SEARCH, INDEX_PATH,
+                    embedding_prefixes, min_similarity)
 
 
 # ── Result type ────────────────────────────────────────────────────────────────
@@ -96,6 +112,7 @@ class RetrievedChunk:
     block_type: str
     page_number: int
     source_file: str
+    fused: Optional[float] = None   # hybrid search: Reciprocal Rank Fusion score (ranks results)
 
     def as_context_string(self) -> str:
         """
@@ -132,6 +149,24 @@ def _build_where(filters: dict) -> Optional[dict]:
     return {"$and": [{k: {"$eq": v}} for k, v in clean.items()]}
 
 
+def _make_chunk(cid: str, doc: str, meta: dict, score: float) -> RetrievedChunk:
+    return RetrievedChunk(
+        chunk_id=cid,
+        text=doc,
+        score=round(score, 4),
+        etf_isin=       meta.get("etf_isin",        ""),
+        etf_ticker=     meta.get("etf_ticker",       ""),
+        issuer=         meta.get("issuer",           ""),
+        doc_type=       meta.get("doc_type",         ""),
+        year=           int(meta.get("year",         0)),
+        quarter=        meta.get("quarter",          ""),
+        section_heading=meta.get("section_heading",  ""),
+        block_type=     meta.get("block_type",       "text"),
+        page_number=    int(meta.get("page_number",  -1)),
+        source_file=    meta.get("source_file",      ""),
+    )
+
+
 def _parse_results(
     query_result: dict,
     query: str = "",
@@ -145,25 +180,43 @@ def _parse_results(
     metas     = query_result["metadatas"][0]
     distances = query_result["distances"][0]   # cosine distance (0 = identical)
 
-    chunks = []
-    for cid, doc, meta, dist in zip(ids, docs, metas, distances):
-        score = 1.0 - dist   # convert distance → similarity
-        chunks.append(RetrievedChunk(
-            chunk_id=cid,
-            text=doc,
-            score=round(score, 4),
-            etf_isin=       meta.get("etf_isin",        ""),
-            etf_ticker=     meta.get("etf_ticker",       ""),
-            issuer=         meta.get("issuer",           ""),
-            doc_type=       meta.get("doc_type",         ""),
-            year=           int(meta.get("year",         0)),
-            quarter=        meta.get("quarter",          ""),
-            section_heading=meta.get("section_heading",  ""),
-            block_type=     meta.get("block_type",       "text"),
-            page_number=    int(meta.get("page_number",  -1)),
-            source_file=    meta.get("source_file",      ""),
-        ))
-    return chunks
+    # distance → similarity
+    return [_make_chunk(cid, doc, meta, 1.0 - dist)
+            for cid, doc, meta, dist in zip(ids, docs, metas, distances)]
+
+
+# ── Lexical search (BM25) ──────────────────────────────────────────────────────
+# Embeddings are weak on exact tokens: ISINs, acronyms (TER, OCF, SRI, KID) and
+# figures. BM25 over the same chunks catches them; the two rankings are merged
+# with Reciprocal Rank Fusion (RRF), which needs only ranks, not comparable scores.
+
+RRF_K          = 60     # standard RRF constant: score = Σ 1 / (RRF_K + rank)
+HYBRID_POOL    = 20     # candidates taken from each ranking before fusion
+BM25_WEIGHT    = 0.5    # weight of the BM25 ranking in the fusion (vector ranking: 1.0;
+                        # task 5.3: 0.5 beat 1.0, which let generic tokens push out vector hits)
+
+_TOKEN_RE = re.compile(r"[a-z0-9]+(?:[.,]\d+)?%?")
+
+
+def tokenize(text: str) -> list[str]:
+    """Lowercase word/number tokens; keeps 0.20% and IE00B4L5Y983 whole."""
+    return _TOKEN_RE.findall(text.lower())
+
+
+def _matches(meta: dict, filters: dict) -> bool:
+    """Python-side equivalent of the _build_where equality filter."""
+    return all(meta.get(k) == v for k, v in filters.items() if v is not None and v != "")
+
+
+def rrf_fuse(rankings: list[list[str]], weights: Optional[list[float]] = None,
+             k: int = RRF_K) -> dict[str, float]:
+    """(Weighted) Reciprocal Rank Fusion of ranked id lists → {id: fused score}."""
+    weights = weights or [1.0] * len(rankings)
+    fused: dict[str, float] = {}
+    for ranking, w in zip(rankings, weights):
+        for rank, cid in enumerate(ranking, 1):
+            fused[cid] = fused.get(cid, 0.0) + w / (k + rank)
+    return fused
 
 
 def _deduplicate(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
@@ -175,8 +228,24 @@ def _deduplicate(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
     return list(seen.values())
 
 
+def apply_min_score(chunks: list[RetrievedChunk], min_score: float,
+                    query: str = "") -> tuple[list[RetrievedChunk], list[RetrievedChunk]]:
+    """
+    Split chunks into (kept, dropped): a chunk is dropped when its cosine
+    similarity is below `min_score` — unless it contains a token of the query
+    that has a digit (an ISIN, a figure), an exact match that embeddings rank poorly.
+    """
+    identifiers = {t for t in tokenize(query) if any(ch.isdigit() for ch in t)}
+    kept, dropped = [], []
+    for c in chunks:
+        exact = bool(identifiers & set(tokenize(c.text)))
+        (kept if c.score >= min_score or exact else dropped).append(c)
+    return kept, dropped
+
+
 def _sort_by_score(chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
-    return sorted(chunks, key=lambda c: c.score, reverse=True)
+    """Fused (hybrid) score when present, else cosine similarity."""
+    return sorted(chunks, key=lambda c: c.fused if c.fused is not None else c.score, reverse=True)
 
 
 # ── Retriever class ────────────────────────────────────────────────────────────
@@ -192,9 +261,11 @@ class Retriever:
         db_path: Union[str, Path] = INDEX_PATH,
         model_name: str = EMBEDDING_MODEL,
         collection_name: str = COLLECTION_NAME,
+        hybrid: bool = HYBRID_SEARCH,
     ):
         self._db_path    = Path(db_path)
         self._model_name = model_name
+        self.hybrid      = hybrid
 
         print(f"[retrieve] Loading ChromaDB from {self._db_path}")
         self._client = chromadb.PersistentClient(path=str(self._db_path))
@@ -222,16 +293,75 @@ class Retriever:
 
         print(f"[retrieve] Collection '{collection_name}' — {count} chunks")
 
+        # Query and passage vectors must come from the same model
+        indexed_with = (self._collection.metadata or {}).get("embedding_model")
+        if indexed_with != model_name:
+            raise RuntimeError(
+                f"\n  The index was built with embedding model {indexed_with!r}, "
+                f"but queries would use {model_name!r}.\n"
+                f"  Rebuild the index with the configured model:\n"
+                f"      python setup.py --rebuild\n"
+            )
+
         print(f"[retrieve] Loading model: {model_name}")
         self._model = SentenceTransformer(model_name)
+        self._query_prefix = embedding_prefixes(model_name)[0]
+        # Callers (the agent) drop chunks below this similarity: see apply_min_score
+        self.min_score = min_similarity(model_name)
+
+        # The whole corpus in memory for BM25 (a few hundred chunks at most) and
+        # its vectors, to give lexical-only hits a cosine similarity too
+        if self.hybrid:
+            corpus = self._collection.get(include=["documents", "metadatas", "embeddings"])
+            self._ids   = corpus["ids"]
+            self._docs  = corpus["documents"]
+            self._metas = corpus["metadatas"]
+            self._vecs  = np.asarray(corpus["embeddings"], dtype=np.float32)
+            self._bm25  = BM25Okapi([tokenize(d) for d in self._docs])
+            print(f"[retrieve] Hybrid search: BM25 + vectors (RRF)")
 
     def _embed_query(self, query: str) -> list[float]:
         vec = self._model.encode(
-            query,
+            self._query_prefix + query,
             normalize_embeddings=True,
             convert_to_numpy=True,
         )
         return vec.tolist()
+
+    def _query(self, query: str, q_vec: list[float], filters: dict, k: int) -> list[RetrievedChunk]:
+        """
+        Top-k chunks matching `filters` (equality on metadata fields). Vector
+        search only, or — hybrid — vector and BM25 rankings fused with RRF.
+        `score` is always the cosine similarity of the chunk to the query.
+        """
+        where = _build_where(filters)
+        kwargs = dict(
+            query_embeddings=[q_vec],
+            n_results=max(k, HYBRID_POOL) if self.hybrid else k,
+            include=["documents", "metadatas", "distances"],
+        )
+        if where:
+            kwargs["where"] = where
+        vector_hits = _parse_results(self._collection.query(**kwargs), query)
+        if not self.hybrid:
+            return vector_hits
+
+        candidates = [i for i, m in enumerate(self._metas) if _matches(m, filters)]
+        bm25 = self._bm25.get_scores(tokenize(query))
+        lexical = sorted((i for i in candidates if bm25[i] > 0), key=lambda i: -bm25[i])
+        lexical_ids = [self._ids[i] for i in lexical[:HYBRID_POOL]]
+
+        fused = rrf_fuse([[c.chunk_id for c in vector_hits], lexical_ids], [1.0, BM25_WEIGHT])
+        by_id = {c.chunk_id: c for c in vector_hits}
+        q = np.asarray(q_vec, dtype=np.float32)
+        for i in lexical[:HYBRID_POOL]:
+            cid = self._ids[i]
+            if cid not in by_id:
+                by_id[cid] = _make_chunk(cid, self._docs[i], self._metas[i],
+                                         float(self._vecs[i] @ q))
+        for cid, c in by_id.items():
+            c.fused = round(fused[cid], 6)
+        return _sort_by_score(list(by_id.values()))[:k]
 
     # ── Public retrieval methods ───────────────────────────────────────────────
 
@@ -248,19 +378,7 @@ class Retriever:
         filters: any subset of {etf_isin, doc_type, year, issuer,
                                  block_type, section_heading}
         """
-        where   = _build_where(filters or {})
-        q_vec   = self._embed_query(query)
-
-        kwargs = dict(
-            query_embeddings=[q_vec],
-            n_results=k,
-            include=["documents", "metadatas", "distances"],
-        )
-        if where:
-            kwargs["where"] = where
-
-        result = self._collection.query(**kwargs)
-        return _parse_results(result, query)
+        return self._query(query, self._embed_query(query), filters or {}, k)
 
     def comparative(
         self,
@@ -283,19 +401,8 @@ class Retriever:
 
         for isin in isin_list:
             etf_filter = {"etf_isin": isin, **(filters or {})}
-            where = _build_where(etf_filter)
-
-            kwargs = dict(
-                query_embeddings=[q_vec],
-                n_results=k_per_etf,
-                include=["documents", "metadatas", "distances"],
-            )
-            if where:
-                kwargs["where"] = where
-
             try:
-                result = self._collection.query(**kwargs)
-                all_chunks.extend(_parse_results(result, query))
+                all_chunks.extend(self._query(query, q_vec, etf_filter, k_per_etf))
             except Exception as e:
                 print(f"  [warn] No results for {isin}: {e}")
 
@@ -322,19 +429,8 @@ class Retriever:
 
         for dt in doc_types:
             dt_filter = {"etf_isin": etf_isin, "doc_type": dt, **(filters or {})}
-            where = _build_where(dt_filter)
-
-            kwargs = dict(
-                query_embeddings=[q_vec],
-                n_results=k_per_doc_type,
-                include=["documents", "metadatas", "distances"],
-            )
-            if where:
-                kwargs["where"] = where
-
             try:
-                result = self._collection.query(**kwargs)
-                all_chunks.extend(_parse_results(result, query))
+                all_chunks.extend(self._query(query, q_vec, dt_filter, k_per_doc_type))
             except Exception as e:
                 print(f"  [warn] No results for {etf_isin}/{dt}: {e}")
 
@@ -460,13 +556,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--year",       type=int, default=None)
     p.add_argument("--k",          type=int, default=5, help="Chunks to retrieve")
     p.add_argument("--json",       action="store_true", help="Output results as JSON")
+    p.add_argument("--vector_only", action="store_true",
+                   help="Embeddings only, no BM25 fusion (default: config.HYBRID_SEARCH)")
     return p
 
 
 def main():
     args = build_parser().parse_args()
 
-    retriever = Retriever(db_path=args.db_path)
+    retriever = Retriever(db_path=args.db_path, hybrid=HYBRID_SEARCH and not args.vector_only)
 
     filters: dict = {}
     if args.etf_isin:  filters["etf_isin"]  = args.etf_isin

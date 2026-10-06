@@ -52,7 +52,7 @@ from typing import Optional
 from config import INDEX_PATH as DB_PATH
 from citations import ChunkBook, chunk_header, resolve_citations
 from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, Usage, get_llm
-from retrieve import Retriever, RetrievedChunk
+from retrieve import Retriever, RetrievedChunk, apply_min_score
 from live_data import get_etf_live_data, format_for_prompt
 from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, get_fund,
                       resolve_isins)
@@ -265,10 +265,14 @@ class ToolExecutor:
 
     def _search_etf_docs(self, query: str, **kwargs) -> str:
         """Run semantic search and return the chunks, numbered for citation, as text."""
-        chunks = self.search(query, **kwargs)
+        min_score = self._retriever.min_score
+        chunks, dropped = apply_min_score(self.search(query, **kwargs), min_score, query)
         self.retrieved.extend(chunks)
         if not chunks:
-            return "No relevant document chunks found for this query."
+            best = f" (best similarity {max(c.score for c in dropped):.2f}, " \
+                   f"threshold {min_score:.2f})" if dropped else ""
+            return (f"No relevant document chunks found for this query{best}. "
+                    "Rephrase the query or change the filters.")
 
         # Numbers run across every search of the same question; a chunk already
         # shown keeps its number and is not repeated.
@@ -281,6 +285,9 @@ class ToolExecutor:
                 lines.append("")
             else:
                 lines.append(f"[Chunk {n}] (already shown above)")
+        if dropped:
+            lines.append(f"[{len(dropped)} more result(s) discarded as not relevant enough "
+                         f"(similarity below {min_score:.2f}).]")
         return "\n".join(lines).strip()
 
     def _get_live_data(self, isin: str) -> str:
@@ -331,8 +338,10 @@ with no preamble about your searches (e.g. no "Now I have the information I need
 
 # "Perfect! Now I have all the information I need." — narration about the
 # searches that the model sometimes puts before the answer despite the prompt.
+# Italian too ("Perfetto! Ora ho la risposta completa."), for questions in Italian.
 _PREAMBLE_RE = re.compile(
-    r"^\s*(?:perfect|great|excellent)\b|\b(?:i now have|now i have|let me)\b", re.I)
+    r"^\s*(?:perfect|great|excellent|perfetto|ottimo|eccellente)\b"
+    r"|\b(?:i now have|now i have|let me|ora ho|adesso ho|lasciami|fammi)\b", re.I)
 
 
 def strip_preamble(text: str) -> str:
