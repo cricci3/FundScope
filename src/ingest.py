@@ -59,7 +59,8 @@ class KeyFacts:
     inception_date: Optional[str] = None
     benchmark: Optional[str] = None
     distribution_policy: Optional[str] = None   # Accumulating / Distributing
-    replication_method: Optional[str] = None
+    replication_method: Optional[str] = None    # product structure: physical / synthetic
+    methodology: Optional[str] = None           # factsheet: optimised / full replication
     domicile: Optional[str] = None
     currency: Optional[str] = None
 
@@ -203,44 +204,51 @@ def detect_section_heading(
 
 # ── Key facts extraction ───────────────────────────────────────────────────────
 
-# Factsheet patterns
+# Patterns are case-sensitive and anchored on the labels issuers actually print
+# ("Total Expense Ratio : 0.20%", "TER (flat fee) 0.06%"): case-insensitive
+# generic labels used to match prose ("index composed of ...") and fill the
+# key-facts chunk with wrong values. A pattern may have several groups: the
+# first non-empty one is the value.
+_PCT = r"\d+(?:[.,]\d+)?\s*%"
+
+# Factsheet patterns (labels of iShares, UBS, Xtrackers, Amundi factsheets)
 _FACTSHEET_KF_PATTERNS = {
-    "isin":                r"\bISIN\b[:\s]+([A-Z]{2}[A-Z0-9]{10})\b",
-    "ter_ocf":             r"(?:TER|OCF|Ongoing [Cc]harge[s]?|Total [Ee]xpense [Rr]atio)[:\s]+([0-9]+\.[0-9]+\s*%)",
-    "aum":                 r"(?:Fund [Ss]ize|AUM|Net [Aa]ssets|Total [Aa]ssets)[:\s]+((?:USD|EUR|GBP|CHF)?\s*[\d,\.]+\s*(?:bn|mn|m|b)?)",
-    "inception_date":      r"(?:Inception [Dd]ate|Launch [Dd]ate|Fund [Ii]nception)[:\s]+(\d{1,2}[\./\-]\w+[\./\-]\d{2,4}|\w+ \d{1,2},? \d{4})",
-    "benchmark":           r"(?:Benchmark|Index|Tracks)[:\s]+([A-Z][^\n]{5,80}?)(?:\n|$)",
-    "distribution_policy": r"(?:Distribution|Dividend)[:\s]+(Accumulating|Distributing|Income|Acc|Dist)\b",
-    "replication_method":  r"(?:Replication|Replication [Mm]ethod)[:\s]+(Physical|Synthetic|Optimised Physical|Sampled Physical)\b",
-    "domicile":            r"(?:Domicile|Fund [Dd]omicile)[:\s]+([A-Za-z ]{3,30})(?:\n|$)",
-    "currency":            r"(?:Base [Cc]urrency|Fund [Cc]urrency|Currency)[:\s]+([A-Z]{3})\b",
-    "num_holdings":        r"(?:Number of [Hh]oldings|Holdings)[:\s]+(\d[\d,]+)\b",
-    "tracking_difference": r"(?:Tracking [Dd]ifference|TD)[:\s]+(-?[0-9]+\.[0-9]+\s*%)",
-    "morningstar_rating":  r"(?:Morningstar [Rr]ating)[:\s]+(\d(?:\.\d)?\s*(?:stars?)?|★+)",
+    "isin":                r"\bISIN\s*:?\s*([A-Z]{2}[A-Z0-9]{9}\d)\b",
+    "ter_ocf":             r"(?:Total Expense Ratio|TER(?: \(flat fee\))?|OCF|Ongoing [Cc]harges?(?: [Ff]igure)?)\s*:?\s*(" + _PCT + ")",
+    "aum":                 r"((?:Net Assets of Fund \(M\)|Total fund assets \([A-Z]{3} m\)|Fund [Ss]ize|AUM)\s*:?\s*\d[\d ,]*(?:\.\d+)?(?: [A-Z]{3}\b)?)",
+    "inception_date":      r"(?:Fund Launch Date|Share Class Launch Date|Launch date|Inception [Dd]ate)\s*:?\s*(\d{1,2}[./-](?:\d{1,2}|[A-Z][a-z]{2})[./-]\d{2,4})",
+    "benchmark":           r"(?:Benchmark|Index name|Underlying index)\s*:\s*((?:MSCI|FTSE|S&P|Bloomberg|Solactive|STOXX|Markit|iBoxx|Russell|Nasdaq)\b[^\n:]{2,78}?)\s*$",
+    "distribution_policy": r"(?:Use of Income|Distribution(?: [Pp]olicy)?)\s*:?\s*(Accumulating|Distributing|Reinvestment|Accumulation)\b",
+    "replication_method":  r"(?:Replication methodology|Replication [Mm]ethod|Product Structure)\s*:?\s*(Physical(?: \([^)\n]*\))?|Synthetic|Optimi[sz]ed|Sampling)",
+    "methodology":         r"\bMethodology\s*:\s*(Optimi[sz]ed|Replicated|Full(?:y)? [Rr]eplicat\w*|Sampl\w+)",
+    "domicile":            r"(?:Fund domicile|Domicile)\s*:?\s*([A-Z][a-z]+(?: [A-Z][a-z]+)?)",
+    "currency":            r"(?:Share Class Currency|Currency of fund / share class|Base [Cc]urrency|Fund [Cc]urrency)\s*:?\s*([A-Z]{3}(?:/[A-Z]{3})?)\b",
+    "num_holdings":        r"(?:Number of [Hh]oldings|Number of positions)\s*:?\s*(\d[\d,]*)",
+    "tracking_difference": r"Tracking [Dd]ifference\s*:?\s*(-?\d+[.,]\d+\s*%)",
+    "morningstar_rating":  r"Morningstar [Rr]ating\s*:?\s*(\d(?:\.\d)?\s*(?:stars?)?|★+)",
 }
 
-# KID patterns — costs are itemised, SRRI replaces Morningstar
+# KID patterns (PRIIPs wording) — costs are itemised, SRI replaces Morningstar
 _KID_KF_PATTERNS = {
-    "isin":                       r"\bISIN\b[:\s]+([A-Z]{2}[A-Z0-9]{10})\b",
-    "inception_date":             r"(?:Inception [Dd]ate|Launch [Dd]ate)[:\s]+(\d{1,2}[\./\-]\w+[\./\-]\d{2,4}|\w+ \d{1,2},? \d{4})",
-    "benchmark":                  r"(?:Benchmark|Index)[:\s]+([A-Z][^\n]{5,80}?)(?:\n|$)",
-    "distribution_policy":        r"(Accumulating|Distributing|Income)\b",
-    "replication_method":         r"(Physical|Synthetic|Optimised Physical|Sampled Physical)\b",
-    "domicile":                   r"(?:Domicile)[:\s]+([A-Za-z ]{3,30})(?:\n|$)",
-    "currency":                   r"(?:Currency of denomination|Currency)[:\s]+([A-Z]{3})\b",
-    # Costs — KIDs present these as a table; we also try inline text
-    "cost_entry":                 r"(?:Entry costs?|One-off entry)[:\s]+([0-9]+\.?[0-9]*\s*%)",
-    "cost_exit":                  r"(?:Exit costs?|One-off exit)[:\s]+([0-9]+\.?[0-9]*\s*%)",
-    "cost_ongoing":               r"(?:Ongoing costs?)[:\s]+([0-9]+\.?[0-9]*\s*%)",
-    "cost_performance":           r"(?:Performance fees?)[:\s]+([0-9]+\.?[0-9]*\s*%|not applicable)",
-    "cost_transaction":           r"(?:Transaction costs?)[:\s]+([0-9]+\.?[0-9]*\s*%)",
-    "srri":                       r"(?:Summary Risk Indicator|SRI|Risk indicator)[:\s\n]+(\d)\b",
-    "recommended_holding_period": r"(?:Recommended holding period)[:\s]+([^\n]{3,60})",
-    "target_market":              r"(?:Intended retail investor|Target market)[:\s]+([^\n]{10,150})",
+    "isin":                       r"\bISIN\s*:?\s*([A-Z]{2}[A-Z0-9]{9}\d)\b",
+    "inception_date":             r"(?:Inception [Dd]ate|Launch [Dd]ate)\s*:?\s*(\d{1,2}[./-](?:\d{1,2}|[A-Z][a-z]{2})[./-]\d{2,4})",
+    "benchmark":                  r"(?:track(?:s)? (?:the )?performance of|reflects the return of) (?:the )?([A-Z][\w&-]*(?: [A-Z][\w&.-]*)* Index(?: \([^)\n]+\))?)",
+    "distribution_policy":        r"((?:accumulating|distributing) shares|[Ff]und income is not paid out, but instead will be reinvested)",
+    "replication_method":         r"(optimising techniques|[Ff]ull(?:y)? replicat\w*|[Pp]hysical(?:ly)? replicat\w*|[Ss]ynthetic(?:ally)? replicat\w*)",
+    "domicile":                   r"Domicile\s*:?\s*([A-Z][a-z]+(?: [A-Z][a-z]+)?)",
+    "currency":                   r"(?:denominated in|Currency of denomination)\s*:?\s*(US Dollar|Euro|[A-Z]{3}\b)",
+    "cost_entry":                 r"Entry costs?\s*:?\s*(" + _PCT + ")|(We do not charge an entry fee)",
+    "cost_exit":                  r"Exit costs?\s*:?\s*(" + _PCT + ")|(We do not charge an exit fee)",
+    "cost_ongoing":               r"Management fees and(?: other)?\s+(" + _PCT + ")|Ongoing costs?\s*:?\s*(" + _PCT + ")",
+    "cost_performance":           r"Performance fees?\s*:?\s*(" + _PCT + ")|(There is no performance fee for this product)",
+    "cost_transaction":           r"Transaction costs?\s*:?\s*(" + _PCT + ")",
+    "srri":                       r"classified this product as (\d) out of 7|Summary Risk Indicator\s*:?\s*(\d)\b",
+    "recommended_holding_period": r"Recommended [Hh]olding [Pp]eriod\s*:\s*(\d+ [Yy]ear(?:s|\(s\))?)",
+    "target_market":              r"(?:Intended retail investor|Target market)\s*:?\s*([^\n]{10,200})",
 }
 
-_FACTSHEET_KF_RE = {k: re.compile(v, re.IGNORECASE) for k, v in _FACTSHEET_KF_PATTERNS.items()}
-_KID_KF_RE       = {k: re.compile(v, re.IGNORECASE) for k, v in _KID_KF_PATTERNS.items()}
+_FACTSHEET_KF_RE = {k: re.compile(v, re.MULTILINE) for k, v in _FACTSHEET_KF_PATTERNS.items()}
+_KID_KF_RE       = {k: re.compile(v, re.MULTILINE) for k, v in _KID_KF_PATTERNS.items()}
 
 
 def extract_key_facts(full_text: str, doc_type: str) -> KeyFacts:
@@ -253,7 +261,7 @@ def extract_key_facts(full_text: str, doc_type: str) -> KeyFacts:
     for field_name, pattern in patterns.items():
         match = pattern.search(full_text)
         if match:
-            setattr(kf, field_name, match.group(1).strip())
+            setattr(kf, field_name, next(g for g in match.groups() if g).strip())
     return kf
 
 
@@ -273,7 +281,9 @@ def table_to_text(table: list[list], context: str = "") -> str:
         row_clean = [str(c).strip() if c is not None else "" for c in row]
         if any(row_clean):
             cleaned.append(row_clean)
-    if not cleaned:
+    # A lone non-empty cell is a heading caught in a table frame
+    # ("Ongoing costs taken each year: "), not data: it only adds noise to the index
+    if sum(1 for row in cleaned for c in row if c) < 2:
         return ""
 
     if all(len(row) == 2 for row in cleaned):
@@ -324,9 +334,11 @@ def clean_text(raw: str, doc_type: str) -> str:
 
 
 # ── Chunking ───────────────────────────────────────────────────────────────────
-# KIDs: larger chunks (400 chars) — sections are short and self-contained,
-#        splitting mid-section loses the regulatory context.
-# Factsheets: smaller chunks (250 chars) — documents are denser.
+# Sizes are chosen by measurement (task 5.1: chunk value recall of
+# evaluation/run_retrieval.py): ~1000-character chunks keep a label and its
+# value together even when the two-column factsheet layout interleaves them,
+# and still fit the embedding model's input window. KIDs get slightly larger
+# chunks: their sections are self-contained regulatory prose.
 
 # Values live in config.py (CHUNK_SIZES, CHUNK_OVERLAPS) so evaluation reports can record them.
 
@@ -440,10 +452,24 @@ def extract_page_blocks(
     raw = page.extract_text(x_tolerance=2, y_tolerance=2) or ""
     cleaned = clean_text(raw, doc_type)
 
-    for line in cleaned.splitlines():
+    # (offset, heading) of each heading line, so every chunk gets the heading
+    # in force where it starts rather than the last heading of the page
+    headings: list[tuple[int, str]] = []
+    pos = 0
+    for line in cleaned.splitlines(keepends=True):
         h = detect_section_heading(line, doc_type, metadata.issuer)
         if h:
-            current_heading = h
+            headings.append((pos, h))
+        pos += len(line)
+
+    page_heading = current_heading
+
+    def _heading_at(offset: int) -> Optional[str]:
+        before = [h for p, h in headings if p <= offset]
+        return before[-1] if before else page_heading
+
+    if headings:
+        current_heading = headings[-1][1]
 
     # For KIDs: tag performance scenario tables with block_type="scenario"
     def _block_type_for_table(heading: Optional[str]) -> str:
@@ -462,7 +488,7 @@ def extract_page_blocks(
             text=chunk_text,
             metadata=metadata,
             page_number=page_num,
-            section_heading=current_heading,
+            section_heading=_heading_at(local_offset),
             block_type="text",
             char_start=global_offset + local_offset,
             char_end=global_offset + local_offset + len(chunk_text),
@@ -522,6 +548,7 @@ def build_key_facts_chunk(metadata: DocumentMetadata) -> Chunk:
     ]
     # Factsheet-only fields
     factsheet_fields = [
+        ("methodology",         "Replication Methodology"),
         ("ter_ocf",             "TER / OCF"),
         ("aum",                 "AUM"),
         ("num_holdings",        "Number of Holdings"),
@@ -535,7 +562,7 @@ def build_key_facts_chunk(metadata: DocumentMetadata) -> Chunk:
         ("cost_ongoing",               "Ongoing Cost"),
         ("cost_performance",           "Performance Fee"),
         ("cost_transaction",           "Transaction Cost"),
-        ("srri",                       "Summary Risk Indicator (1–7)"),
+        ("srri",                       "Summary Risk Indicator (SRI)"),
         ("recommended_holding_period", "Recommended Holding Period"),
         ("target_market",              "Target Market"),
     ]
@@ -544,6 +571,8 @@ def build_key_facts_chunk(metadata: DocumentMetadata) -> Chunk:
     for attr, label in common_fields + active_extra:
         val = getattr(kf, attr, None)
         if val:
+            if attr == "srri":
+                val = f"{val} out of 7"
             lines.append(f"{label}: {val}")
 
     text = "\n".join(lines)

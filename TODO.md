@@ -257,7 +257,11 @@ non alla lettera su grounded/attribution/retrieval:
 
 ## Fase 5 — Qualità del retrieval
 
-- [ ] **5.1 Chunk più grandi** — con modelli cloud portare `CHUNK_SIZES` a ~800–1200 caratteri (factsheet) e ~1000–1500 (KID), overlap ~15%; scegliere in base alle metriche.
+- [x] **5.1 Chunk più grandi** — con modelli cloud portare `CHUNK_SIZES` a ~800–1200 caratteri (factsheet) e ~1000–1500 (KID), overlap ~15%; scegliere in base alle metriche.
+  - Nuova metrica gratuita **chunk value recall** (`evaluate.py`, anche `--retrieval_only`): quota dei valori attesi presenti nel testo dei chunk recuperati (P/R restano a livello di documento).
+  - Ingest: pattern dei key facts riscritti sulle etichette reali (case-sensitive: prima "Benchmark: composed of companies…", "Currency: and", "Distribution Policy: income" per un fondo ad accumulazione); ora il chunk key facts ha replication "Physical", methodology "Optimised", TER, SRI "4 out of 7", costi KID. Tabelle con una sola cella non vuota scartate; `section_heading` per chunk (non più l'ultimo della pagina).
+  - Sweep (MiniLM, retrieval-only): 250/400 → value recall 0.714 · 500/700 → 0.893 · 800/1000 → 0.929 · **1000/1200 → 1.000** · 1200/1500 → 1.000 (oltre la finestra di 256 token del modello). Scelto 1000/1200, overlap 15%; indice 88 chunk (prima 299). Prima del 5.1: 0.571.
+  - Agent: K ridotti (single 4, per ETF 2, per doc_type 2) perché i chunk sono ~4× più grandi. T1_006 (replication "Physical") ora risolta. Il reflow a colonne del layout factsheet è stato provato e scartato: spezzava le tabelle (holdings, rendimenti).
 - [ ] **5.2 Embedding multilingue** — provare `intfloat/multilingual-e5-small` (prefissi `query:`/`passage:`) o `paraphrase-multilingual-MiniLM-L12-v2`; aggiungere domande in italiano alla ground truth. Salvare il modello di embedding nei metadati della collection (errore se query e indice usano modelli diversi).
 - [ ] **5.3 Retrieval ibrido** — BM25 (`rank_bm25`) + vettoriale fusi con Reciprocal Rank Fusion: aiuta su ISIN, sigle (TER, OCF, SRI) e numeri.
 - [ ] **5.4 Soglia di score** — scartare chunk sotto una similarità minima e segnalarlo al modello.

@@ -69,9 +69,10 @@ FINAL_CALL_NOTICE = (
     "above, and say which facts the documents did not provide.]"
 )
 MAX_TOKENS      = 1024
-K_SINGLE        = 6              # chunks for a single-fund search
-K_PER_ETF       = 3              # chunks per fund in comparative mode
-K_PER_DOC_TYPE  = 3              # chunks per document type in cross_doc mode
+# Chunks are ~1000 characters (config.CHUNK_SIZES), so a few per search suffice
+K_SINGLE        = 4              # chunks for a single-fund search
+K_PER_ETF       = 2              # chunks per fund in comparative mode
+K_PER_DOC_TYPE  = 2              # chunks per document type in cross_doc mode
 
 SEARCH_MODES = ["single", "comparative", "cross_doc"]
 

@@ -22,9 +22,11 @@ EVAL_DIR       = PROJECT_ROOT / "evaluation"
 COLLECTION_NAME = "etf_chunks"
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"   # 384d, ~80 MB, CPU-native
 
-# Chunk size / overlap in characters, per doc type (used by ingest.py)
-CHUNK_SIZES    = {"factsheet": 250, "kid": 400}
-CHUNK_OVERLAPS = {"factsheet": 30, "kid": 40}
+# Chunk size / overlap in characters, per doc type (used by ingest.py).
+# Task 5.1 sweep (retrieval only, chunk value recall): 250/400 → 0.71,
+# 500/700 → 0.89, 800/1000 → 0.93, 1000/1200 → 1.00; overlap 15%.
+CHUNK_SIZES    = {"factsheet": 1000, "kid": 1200}
+CHUNK_OVERLAPS = {"factsheet": 150, "kid": 180}
 
 # ── LLM provider ───────────────────────────────────────────────────────────────
 # Values come from .env (see .env.example); real environment variables win over

@@ -3,6 +3,7 @@ evaluate.py — Evaluation of the ETF RAG pipeline
 
 Measures independently:
   1. Retrieval quality    — are the right documents retrieved? (precision/recall@k)
+                            do the chunks hold the expected values? (chunk value recall)
   2. Answer correctness   — heuristic: expected key values (Type 1–2) / rubric keywords (Type 4)
   3. Unsupported numbers  — heuristic: figures in the answer that are absent from the context
   4. Attribution accuracy — are the right sources cited?
@@ -80,6 +81,7 @@ class RetrievalResult:
     precision_at_k: float
     recall_at_k: float
     any_relevant_retrieved: bool
+    value_recall: Optional[float] = None      # chunk level: share of expected values in the chunks
 
 
 @dataclass
@@ -174,6 +176,7 @@ def evaluate_retrieval(question: dict, pipeline_entry: dict) -> RetrievalResult:
             precision_at_k=0.0,
             recall_at_k=0.0,
             any_relevant_retrieved=False,
+            value_recall=chunk_value_recall(question, []),
         )
 
     relevant_retrieved = [
@@ -194,7 +197,31 @@ def evaluate_retrieval(question: dict, pipeline_entry: dict) -> RetrievalResult:
         precision_at_k=round(precision, 3),
         recall_at_k=round(recall, 3),
         any_relevant_retrieved=len(relevant_retrieved) > 0,
+        value_recall=chunk_value_recall(question, retrieved),
     )
+
+
+def chunk_value_recall(question: dict, retrieved: list[dict]) -> Optional[float]:
+    """
+    Chunk-level retrieval: share of the expected values that appear in the text of
+    the retrieved chunks (precision/recall above only check the document). Values
+    under an ISIN label are looked up in that ETF's chunks, under a doc_type label
+    ("factsheet", "kid") in chunks of that type. None without expected_values.
+    Small integers (e.g. an SRI of "4") can match by chance: it is a lower bound
+    on misses, not proof that the right chunk was found.
+    """
+    expected = question.get("expected_values")
+    if not expected:
+        return None
+    groups = expected if isinstance(expected, dict) else {"answer": expected}
+    found = []
+    for label, values in groups.items():
+        scope = [c for c in retrieved
+                 if label.upper() == _get(c, "etf_isin").upper() or label == _get(c, "doc_type")
+                 or not re.fullmatch(r"[A-Z]{2}[A-Z0-9]{10}|factsheet|kid", label)]
+        text = "\n".join(_get(c, "text") for c in scope)
+        found += [value_present(v, text) for v in values]
+    return round(sum(found) / len(found), 3)
 
 
 # ── Text and number normalisation ──────────────────────────────────────────────
@@ -468,6 +495,8 @@ def _metrics(results: list[QuestionEval]) -> dict:
         "retrieval_precision_mean": _mean(r.retrieval.precision_at_k for r in results),
         "retrieval_recall_mean":    _mean(r.retrieval.recall_at_k    for r in results),
         "any_relevant_pct":         _mean(float(r.retrieval.any_relevant_retrieved) for r in results),
+        "chunk_value_recall_mean":  _mean(r.retrieval.value_recall for r in results
+                                          if r.retrieval.value_recall is not None),
         "attribution_score_mean":   _mean(r.attribution.attribution_score for r in results),
         "expected_values_pass_pct": _mean(
             float(r.faithfulness.answer_contains_expected) for r in results
@@ -609,6 +638,7 @@ def print_summary(summary: dict) -> None:
     print(f"  Retrieval Precision@k  : {_pct(ov['retrieval_precision_mean'])}")
     print(f"  Retrieval Recall@k     : {_pct(ov['retrieval_recall_mean'])}")
     print(f"  Any Relevant Retrieved : {_pct(ov['any_relevant_pct'])}")
+    print(f"  Chunk Value Recall     : {_pct(ov['chunk_value_recall_mean'])}   (expected values in the chunks, Type 1–2)")
     print(f"  Attribution Score      : {_pct(ov['attribution_score_mean'])}")
     print(f"  Expected Values Found  : {_pct(ov['expected_values_pass_pct'])}   (heuristic, Type 1–2)")
     print(f"  Rubric must_mention    : {_pct(ov['rubric_must_mention_mean'])}   (heuristic, Type 4)")
