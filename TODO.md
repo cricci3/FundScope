@@ -40,19 +40,20 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ---
 
-## Stato attuale (aggiornato 2026-10-05)
+## Stato attuale (aggiornato 2026-10-06)
 
-- **Branch:** solo `main`, allineato e pushato su `origin/main` (`d66e573`, fase 4 chiusa). Branch locale `refactor/cloud-llm` cancellato; resta `origin/refactor/cloud-llm` su GitHub → task 0.3 aperto (cancellazione remota da confermare con l'utente).
-- **Test/lint:** nessuna suite né ruff (`uv run pytest` / `uv run ruff` → "program not found"; previsti in fase 8). Le verifiche della fase 4 (risoluzione `[Chunk N]`, memoria con LLM finto, argomenti di `search_etf_docs`, rimozione del preambolo) sono state fatte con script temporanei non salvati.
-- **Fatto nell'ultima sessione:** fase 4 completa e verificata con run completa + judge (esito e tabella sotto la fase 4): judge pass 35% → 71%, astensioni 35% → 6%. Credito Anthropic speso finora ≈ 1,16 $.
+- **Branch:** solo `main`, pushato su `origin/main` a fine fase 5. Resta `origin/refactor/cloud-llm` su GitHub → task 0.3 aperto (cancellazione remota da confermare con l'utente).
+- **Test/lint:** nessuna suite né ruff (previsti in fase 8). Le verifiche della fase 5 (sweep di chunk/embedding/ibrido, replay delle ricerche dell'agent, soglia) sono state fatte con script temporanei non salvati; la metrica che usavano (chunk value recall) è ora in `evaluate.py`.
+- **Fatto nell'ultima sessione:** fase 5 completa (esito e tabella sotto la fase 5): chunk 1000/1200, key facts corretti, multilingual-e5-base, ricerca ibrida BM25+RRF, soglia di similarità, key facts in testa ai risultati dell'agent, engine `full`. Credito Anthropic speso finora ≈ 2,33 $ (fase 5: 1,17 $).
 - **Problemi aperti / scoperti:**
-  - Retrieval: nel factsheet iShares "Product Structure : Physical" è spezzato dal layout a colonne e non viene trovato → T1_006 e T2_007 falliscono anche dopo 4–6 ricerche (fase 5 e/o ingest).
+  - Groundedness dell'agent 70.6% sulle 17 inglesi: Haiku aggiunge spiegazioni non presenti nei documenti ("full replication means…", "to reduce costs"), nonostante la regola nel system prompt. Candidato: regola più esplicita ("non spiegare i termini") o un passaggio di verifica.
+  - T2_001: l'agent sceglie lo 0,1% del KID invece del TER 0,06% del factsheet (entrambi nel contesto); la ground truth chiede il factsheet.
+  - Full context (pass 76.5%) batte l'agent (64.7%) su questo corpus piccolo e costa meno: da riconsiderare dopo l'ampliamento del corpus (fase 7).
   - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (task 6.1); `EUNL.DE` funziona con dati reali.
-  - Agent ≈ 0,012 $/domanda (3,2 chiamate in media, prompt che cresce a ogni ricerca, nessun cache hit perché Haiku 4.5 richiede prefissi ≥ 4096 token): da valutare un breakpoint di cache sull'ultimo messaggio o meno chunk per ricerca.
-  - Haiku a volte inventa esempi numerici (T4_001, "€100.000 in 20 anni") nonostante la regola nel system prompt. Judge non deterministico (±1 domanda tra run).
-- **Decisioni recenti:** `pipeline.py` valuta di default l'agent, che riceve solo la domanda (la pipeline fissa resta come `--engine rag`, per confronto); il judge riceve il registro fondi dato all'agent (`reference_data`), perché fa parte del contesto dell'agent; `baseline_cloud.json` resta la baseline ufficiale (la promozione di `report_phase4_agent.json` non è stata decisa).
-- **Proposta (da approvare, non in roadmap):** metrica di retrieval a livello di chunk (il chunk recuperato/citato contiene il valore atteso?); l'output della pipeline salva già `cited_chunk_ids`.
-- **Prossimo passo:** 1) fase 5: ispezionare i chunk del factsheet iShares (`data/processed/IE00B4L5Y983_2026_Q4_factsheet.json`) e provare 5.1 (chunk più grandi) misurando con `evaluation/run_retrieval.py` (gratis) e `--qids T1_006 T2_007`; 2) chiedere all'utente se cancellare `origin/refactor/cloud-llm` (chiude 0.3).
+  - L'avvio è lento (~40 s: import + modello e5-base da 1,1 GB); con `HF_HUB_OFFLINE=1` si evitano i controlli di rete su Hugging Face.
+  - Judge non deterministico (±1 domanda tra run).
+- **Decisioni recenti:** embedding `intfloat/multilingual-e5-base` (l'indice registra il modello; cambiarlo richiede `setup.py --rebuild`); ground truth a 22 domande (le 5 italiane in coda); `baseline_cloud.json` resta la baseline ufficiale (promozione di un report di fase 4/5 non decisa).
+- **Prossimo passo:** 1) chiedere all'utente se cancellare `origin/refactor/cloud-llm` (chiude 0.3); 2) fase 6 (dati di mercato, `src/live_data.py`), a partire da 6.1 (ticker UBS).
 
 ---
 
@@ -271,7 +272,30 @@ non alla lettera su grounded/attribution/retrieval:
   - e5-base, MRR con filtri: vettoriale 0.807 → ibrido peso BM25 0.5 **0.831** (peso 1.0: 0.799); senza filtri 0.736 → 0.775, precision 0.573 → 0.636. Scelto peso 0.5. Effetto piccolo: con i filtri per ISIN/doc_type restano ~20 chunk per documento.
 - [x] **5.4 Soglia di score** — scartare chunk sotto una similarità minima e segnalarlo al modello.
   - `config.MIN_SIMILARITY` per modello (e5-base 0.76): i chunk con valori attesi non scendono sotto 0.768, domande fuori tema ("weather in Rome") arrivano a 0.756. `retrieve.apply_min_score` (tiene comunque i chunk che contengono un token della query con cifre: ISIN, numeri); l'agent scarta e scrive al modello quanti risultati ha scartato, o "No relevant document chunks found (best similarity …)". Le similarità e5 sono compresse (0.76–0.84 anche per chunk di fondi non pertinenti), quindi la soglia elimina solo i casi fuori tema.
-- [ ] **5.5 Modalità "full context" di confronto** — l'intero corpus 2026 è ~19k token: modalità che passa i documenti interi al modello, per misurare quanto il RAG aggiunge rispetto al contesto completo (attenzione ai limiti token/min dei free tier). Con Claude usare il **prompt caching** sul corpus: le letture dalla cache costano un decimo dell'input.
+- [x] **5.5 Modalità "full context" di confronto** — l'intero corpus 2026 è ~19k token: modalità che passa i documenti interi al modello, per misurare quanto il RAG aggiunge rispetto al contesto completo (attenzione ai limiti token/min dei free tier). Con Claude usare il **prompt caching** sul corpus: le letture dalla cache costano un decimo dell'input.
+  - `src/fullcontext.py` + `pipeline.py --engine full`: i 4 documenti (~60k caratteri, 14.9k token) nel system prompt in cache, ognuno citabile come `[Chunk N]`. Il judge, per le run `full`, mette il contesto comune nel proprio system prompt in cache (altrimenti ~0,6 $ a run).
+
+**Esito fase 5 (06/10/2026)** — indice ricostruito (66 chunk: 1000/1200 caratteri, glossario UBS escluso, multilingual-e5-base, ricerca ibrida). Judge Sonnet 5.5, 22 domande (17 inglesi + 5 italiane nuove).
+
+| Metrica (17 domande inglesi) | Baseline 3.7 | Fase 4 agent | **Fase 5 agent** | Fase 5 full context |
+|---|---|---|---|---|
+| Judge verdict pass | 35.3% | 70.6% | 64.7% | **76.5%** |
+| Judge score (pass=1, partial=½) | 41.2% | 76.5% | 82.4% | 85.3% |
+| Judge correctness | 46.7% | 83.3% | 90.0% | 93.3% |
+| Judge grounded | 82.4% | 76.5% | 70.6% | 82.4% |
+| Judge abstained | 35.3% | 5.9% | 0.0% | 0.0% |
+| Attribution | 88.2% | 82.4% | 88.2% | 97.1% |
+| Retrieval precision / recall (documento) | 0.988 / 1.000 | 0.851 / 0.941 | 0.780 / 0.941 | 0.456 / 1.000 |
+| Costo pipeline (22 domande) | — | 0,012 $/domanda | **0,007 $/domanda** (0,154 $) | 0,003 $/domanda (0,069 $) |
+
+Tutte le 22 domande: agent pass 68.2% · score 84.1% · correctness 92.5% · grounded 72.7% · attribution 90.9% · chunk value recall 0.947 · italiano 4/5 pass; full context pass 81.8% · grounded 86.4% · italiano 5/5.
+Report `evaluation/report_phase5_agent.json` (run `runs/20261006T111718Z_claude-haiku-4-5_agent.json`) e `evaluation/report_phase5_full.json` (run `runs/20261006T105824Z_claude-haiku-4-5_full.json`). Costo LLM della fase ≈ 1,17 $ (tre run complete + judge 1,01 $, sottoinsiemi 0,16 $).
+
+Lettura:
+- Il retrieval ora trova il dato: correctness 83% → 90%, astensioni 6% → 0%, risolte T1_006 e T2_007 ("Physical"), T4_002 da partial a pass; costo per domanda −43% (meno ricerche ripetute: 43 chiamate LLM invece di 51 su 22 domande).
+- Il pass scende di una domanda (12 → 11 su 17) per **groundedness**: Haiku aggiunge frasi esplicative non presenti nei documenti ("full replication means…", "to reduce costs"); i nuovi partial T2_002, T2_010, T1_006 hanno fatti corretti. T2_001: l'agent riporta lo 0,1% del KID invece del TER 0,06% del factsheet (entrambi nel contesto). Problema di generazione/prompt, non di retrieval.
+- Prima run di fine fase (`runs/20261006T105513Z…`, pass 63.6%): il glossario del factsheet UBS ("Physical replication: In physical replication…") batteva i dati del fondo per query brevi come "replication method", e con K=2 il chunk key facts restava fuori. Corretto escludendo le pagine di glossario e mettendo in testa ai risultati dell'agent il chunk key facts di ogni documento cercato; il replay delle ricerche registrate dell'agent (nessuna chiamata LLM) dà chunk value recall 0.75 → 1.00 con e5-base (solo ibrido: 0.97; solo key facts: 0.94).
+- **Full context batte l'agent** su questo corpus (4 documenti, 15k token): pass 76% vs 65% sulle inglesi, a meno della metà del costo grazie al prompt caching. Il RAG resta necessario quando il corpus cresce (fase 7): la modalità full serve da riferimento superiore.
 
 ---
 

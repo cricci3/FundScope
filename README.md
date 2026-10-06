@@ -29,13 +29,13 @@ PDF files (factsheets + KIDs)
   data/processed/        JSON files — one array of chunks per document
         │
         ▼
-  src/embed.py           Embed chunks with all-MiniLM-L6-v2, store in ChromaDB
+  src/embed.py           Embed chunks with multilingual-e5-base, store in ChromaDB
         │
         ▼
   index/chroma_db/       Persisted vector store (local, no server needed)
         │
         ▼
-  src/retrieve.py        Semantic search + metadata filtering
+  src/retrieve.py        Hybrid search (vectors + BM25, fused with RRF) + metadata filtering
         │
         ▼
   src/agent.py           Tool-calling agent: the LLM (through src/llm/) decides what to
@@ -361,13 +361,18 @@ python src/ask.py --provider groq --model llama-3.3-70b-versatile
 To measure how well the system retrieves and answers questions against the ground truth set:
 
 ```bash
-# Run the agent over all 17 active ground truth questions (it sees only the question text).
+# Run the agent over all 22 active ground truth questions (17 in English, 5 in Italian;
+# it sees only the question text).
 # Output: evaluation/runs/<UTC timestamp>_<model>_agent.json (never overwritten)
 python src/pipeline.py --run_eval
 
 # The older fixed pipeline, with retrieval routed by the ground-truth hints
 # Output: evaluation/runs/<UTC timestamp>_<model>.json
 python src/pipeline.py --run_eval --engine rag
+
+# No retrieval: every document in the (cached) prompt, for comparison
+# Output: evaluation/runs/<UTC timestamp>_<model>_full.json
+python src/pipeline.py --run_eval --engine full
 
 # While developing, run a subset to keep the cost low
 python src/pipeline.py --run_eval --limit 3
@@ -431,11 +436,15 @@ python src/embed.py --input_dir data/processed/ --db_path index/chroma_db/
 
 **Why ChromaDB?** It stores metadata alongside vectors and supports filtering before semantic search. This is essential for comparative queries — without metadata filtering, one ETF can dominate the top-k results and the other gets no representation.
 
-**Why `all-MiniLM-L6-v2`?** It is 80 MB, runs on CPU in under a second per query, and produces 384-dimensional vectors. Good enough for a focused domain corpus of this size. The upgrade path is `all-mpnet-base-v2` (better quality, ~3x slower).
+**Why `intfloat/multilingual-e5-base`?** Questions may be in Italian while the documents are in English. In a retrieval-only comparison over the whole corpus (no metadata filters) it found the chunk holding the expected value earlier than `all-MiniLM-L6-v2`, `paraphrase-multilingual-MiniLM-L12-v2` and `multilingual-e5-small`, especially on the Italian questions (MRR 0.78 vs 0.43 for MiniLM). It runs on CPU (~1.1 GB, 768 dimensions, 512-token window) and needs the `query:` / `passage:` prefixes, configured in `config.EMBEDDING_PREFIXES`. The index records the model it was built with, and querying it with a different model is an error.
+
+**Why hybrid search?** Embeddings rank exact tokens poorly: ISINs, acronyms (TER, OCF, SRI) and figures. Each search also ranks the same filtered chunks with BM25 and fuses the two rankings with Reciprocal Rank Fusion (BM25 weight 0.5). The agent then drops chunks below a per-model similarity threshold (`config.MIN_SIMILARITY`) and tells the model how many it discarded.
 
 **Why a cloud LLM behind a neutral interface?** Small local models struggled with multi-document reasoning and tool calling. All code outside `src/llm/` talks only to `LLMClient` and its neutral types, so the provider is a configuration choice: Anthropic uses its native SDK (prompt caching, reliable tool use), every other provider goes through one generic OpenAI-compatible backend.
 
-**Chunk size:** factsheets use 250-character chunks, KIDs use 400-character chunks. KID sections are short regulatory prose — cutting them at 250 characters loses the meaning of a section. Tables are kept whole and never split.
+**Chunk size:** factsheets use 1000-character chunks, KIDs 1200, with 15% overlap. Factsheets have a two-column layout that interleaves a label ("Product Structure :") with text from the other column; small chunks (250 characters) often separated a value from its label. A sweep measured with the chunk value recall of `evaluation/run_retrieval.py` went from 0.71 (250/400) to 1.00 (1000/1200). Tables are kept whole and never split, and each document gets a "key facts" chunk built from label patterns (TER, replication, SRI, costs).
+
+**Full-context comparison:** the whole 2026 corpus is ~15k tokens, so `pipeline.py --engine full` answers with every document in the prompt (prompt-cached: later questions read it at a tenth of the input price). It measures what retrieval adds compared with giving the model everything.
 
 **Three retrieval modes:**
 - `single` — one vector search with optional metadata filter (Type 1)
