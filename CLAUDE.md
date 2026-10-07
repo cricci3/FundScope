@@ -22,7 +22,7 @@ No test suite, linter or packaging yet (planned in phase 8). Scripts in `src/` i
 
 Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13): `uv sync` creates `.venv`; prefix the commands below with `uv run` (e.g. `uv run python setup.py`). Add deps with `uv add <pkg>`. `requirements.txt` is legacy (cleanup in TODO 8.1).
 
-LLM configuration lives in `.env` (template: `.env.example`; `.env` is git-ignored, never commit it): `LLM_PROVIDER` (default `anthropic`), `LLM_MODEL` (empty → `claude-haiku-4-5`), `JUDGE_PROVIDER`/`JUDGE_MODEL` (default `claude-sonnet-5-5`), per-provider keys `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, plus `LLM_MAX_COST_USD` (per-run budget, default 0.50) and `LLM_MIN_INTERVAL_S`. Precedence: `--provider`/`--model` flags > env/.env > defaults in `config.py`.
+LLM configuration lives in `.env` (template: `.env.example`; `.env` is git-ignored, never commit it): `LLM_PROVIDER` (default `anthropic`), `LLM_MODEL` (empty → `claude-haiku-4-5`), `JUDGE_PROVIDER`/`JUDGE_MODEL` (default `claude-sonnet-5-5`), per-provider keys `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, plus `LLM_MAX_COST_USD` (per-run budget, default 0.50), `LLM_MIN_INTERVAL_S` and `LIVE_DATA_TTL_S` (Yahoo cache in `data/cache/live_data/`, default 3600, 0 disables). Precedence: `--provider`/`--model` flags > env/.env > defaults in `config.py`.
 
 ```bash
 uv sync
@@ -43,7 +43,7 @@ python src/agent.py [--query "..."] [--show_calls] [--show_chunks] [--show_cost]
 python src/ask.py ...                                                # alias of agent.py, same flags
 python src/fullcontext.py --query "..." [--show_cost]                # no retrieval: every document in the cached prompt
 python src/registry.py                                               # print the fund registry
-python src/live_data.py --isin IE00B4L5Y983                         # yfinance market data
+python src/live_data.py --isin IE00B4L5Y983 [--no_cache]            # yfinance market data (disk cache, TTL LIVE_DATA_TTL_S, default 1 h)
 
 # Evaluation (22 ground-truth questions: 17 English + 5 Italian at the end). Output defaults to evaluation/runs/<UTC ts>_<model>[_agent|_full].json
 # During development use --limit N / --qids ...; run all 22 only at the end of a phase and report the cost.

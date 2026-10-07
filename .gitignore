@@ -1,5 +1,6 @@
 data/raw/
 data/processed/
+data/cache/
 index/
 src/index/
 *.sqlite3

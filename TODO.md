@@ -303,8 +303,11 @@ Lettura:
 ## Fase 6 — Dati di mercato (`src/live_data.py`)
 
 - [ ] **6.1 Verificare il ticker UBS** — `0P0001FMRI.L` sembra un ID fondo, non il ticker di borsa dell'ETF; trovare il ticker Yahoo corretto (Xetra/Borsa Italiana) e spostarlo in `metadata.json` (4.3).
-- [ ] **6.2 Unità dei rendimenti** — verificare se `ytdReturn`, `threeYearAverageReturn`, `fiveYearAverageReturn` sono frazioni (0.12) e in tal caso moltiplicare ×100 prima di `fmt_pct`.
-- [ ] **6.3 Cache** — cache su disco con TTL (es. 1h) per evitare chiamate ripetute a Yahoo durante la valutazione.
+- [x] **6.2 Unità dei rendimenti** — verificare se `ytdReturn`, `threeYearAverageReturn`, `fiveYearAverageReturn` sono frazioni (0.12) e in tal caso moltiplicare ×100 prima di `fmt_pct`.
+  - *Esito (07/10/2026, yfinance 1.7.0, verificato su URTH e SPY): unità miste — `ytdReturn` è già in percentuale (11.74), le medie 3y/5y sono frazioni (0.2245 → ×100). Prima il prompt riportava "3Y Avg: +0.22%".*
+  - I listing europei (EUNL.DE, IWDA.AS, SWDA.L) restituiscono `None` per tutti e tre i campi e per `totalAssets`: lo YTD ora si calcola dallo storico prezzi (ultima chiusura dell'anno precedente → oggi), che viene scaricato per almeno 12 mesi; dallo stesso storico si calcolano 52w high/low (se mancano in `info`) e i rendimenti a 1/3 mesi. Lo storico è aggiustato per i dividendi, quindi lo YTD calcolato può differire da quello di Yahoo (URTH: 12.65% vs 11.74%).
+- [x] **6.3 Cache** — cache su disco con TTL (es. 1h) per evitare chiamate ripetute a Yahoo durante la valutazione.
+  - *Esito (07/10/2026): un JSON per ticker in `data/cache/live_data/` (`config.LIVE_DATA_CACHE_DIR`, git-ignored), TTL `LIVE_DATA_TTL_S` (default 3600 s, 0 = disattivata); gli errori non vengono messi in cache; `live_data.py --no_cache`. Chiamata a Yahoo 1–10 s → lettura dalla cache 0,02 s.*
 
 ---
 

@@ -16,6 +16,7 @@ DATA_PROCESSED = PROJECT_ROOT / "data" / "processed"
 INDEX_PATH     = PROJECT_ROOT / "index" / "chroma_db"
 METADATA_PATH  = SRC_DIR / "metadata.json"
 EVAL_DIR       = PROJECT_ROOT / "evaluation"
+LIVE_DATA_CACHE_DIR = PROJECT_ROOT / "data" / "cache" / "live_data"
 
 # ── Vector store ───────────────────────────────────────────────────────────────
 
@@ -89,3 +90,8 @@ JUDGE_EFFORT   = os.getenv("JUDGE_EFFORT") or "medium"   # reasoning effort hint
 
 LLM_MIN_INTERVAL_S = float(os.getenv("LLM_MIN_INTERVAL_S") or 0)     # throttle for free tiers
 LLM_MAX_COST_USD   = float(os.getenv("LLM_MAX_COST_USD") or 0.50)    # per-run budget
+
+# ── Live market data (live_data.py) ────────────────────────────────────────────
+# Yahoo Finance answers are cached on disk (LIVE_DATA_CACHE_DIR) for this many
+# seconds, so evaluation runs don't hit Yahoo once per question; 0 disables.
+LIVE_DATA_TTL_S = float(os.getenv("LIVE_DATA_TTL_S") or 3600)
