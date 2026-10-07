@@ -42,7 +42,7 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ## Stato attuale (aggiornato 2026-10-06)
 
-- **Branch:** solo `main`, pushato su `origin/main` a fine fase 5. Resta `origin/refactor/cloud-llm` su GitHub → task 0.3 aperto (cancellazione remota da confermare con l'utente).
+- **Branch:** solo `main`, pushato su `origin/main` a fine fase 5. `refactor/cloud-llm` eliminato (0.3, 07/10/2026): fase 0 completa.
 - **Test/lint:** nessuna suite né ruff (previsti in fase 8). Le verifiche della fase 5 (sweep di chunk/embedding/ibrido, replay delle ricerche dell'agent, soglia) sono state fatte con script temporanei non salvati; la metrica che usavano (chunk value recall) è ora in `evaluate.py`.
 - **Fatto nell'ultima sessione:** fase 5 completa (esito e tabella sotto la fase 5): chunk 1000/1200, key facts corretti, multilingual-e5-base, ricerca ibrida BM25+RRF, soglia di similarità, key facts in testa ai risultati dell'agent, engine `full`. Credito Anthropic speso finora ≈ 2,33 $ (fase 5: 1,17 $).
 - **Problemi aperti / scoperti:**
@@ -53,7 +53,7 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
   - L'avvio è lento (~40 s: import + modello e5-base da 1,1 GB); con `HF_HUB_OFFLINE=1` si evitano i controlli di rete su Hugging Face.
   - Judge non deterministico (±1 domanda tra run).
 - **Decisioni recenti:** embedding `intfloat/multilingual-e5-base` (l'indice registra il modello; cambiarlo richiede `setup.py --rebuild`); ground truth a 22 domande (le 5 italiane in coda); `baseline_cloud.json` resta la baseline ufficiale (promozione di un report di fase 4/5 non decisa).
-- **Prossimo passo:** 1) chiedere all'utente se cancellare `origin/refactor/cloud-llm` (chiude 0.3); 2) fase 6 (dati di mercato, `src/live_data.py`), a partire da 6.1 (ticker UBS).
+- **Prossimo passo:** fase 6 (dati di mercato, `src/live_data.py`), a partire da 6.1 (ticker UBS).
 
 ---
 
@@ -62,9 +62,10 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 - [x] **0.1 Branch di lavoro** — ~~creare `refactor/cloud-llm` da `main`~~. Superato: il lavoro della fase 1 è già stato integrato in `main`; da ora si lavora solo su `main` (vedi 0.3).
 - [x] **0.2 Salvare la baseline** — copiare `evaluation/report.json` in `evaluation/baseline_llama3.2-3b.json` per confronto futuro.
   - Done quando: il file baseline esiste e non viene sovrascritto dalle run successive.
-- [ ] **0.3 Eliminare il branch `refactor/cloud-llm`**
+- [x] **0.3 Eliminare il branch `refactor/cloud-llm`**
   - Verificare che sia interamente contenuto in `main` (`git branch --merged main` deve elencarlo), poi `git branch -d refactor/cloud-llm`; se esiste anche su GitHub, `git push origin --delete refactor/cloud-llm`.
   - Done quando: `git branch -a` mostra solo `main` (e `origin/main`).
+  - *Esito (07/10/2026): il branch era già assente su GitHub (`git ls-remote` mostra solo `main`); rimosso il riferimento locale obsoleto `origin/refactor/cloud-llm`, interamente contenuto in `main`.*
 
 ---
 
