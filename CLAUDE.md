@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TODO.md` (Italian) is the project roadmap: phases 0–9, each task with the files involved and a **"Done quando"** (done when) criterion. Work rules:
 
-- **One phase at a time, in order.** Phases 0–5 and 8 are done (the user skipped ahead to phase 8 on 2026-10-20: phase 6 still has task 6.1 open, phase 7 is not started; next is phase 9, the UI). Phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `fundscope.llm` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline; phase 4 made the tool-calling agent the only entrypoint; phase 5 reworked retrieval (bigger chunks, multilingual embeddings, hybrid BM25 search, key facts) and added the full-context engine. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
+- **One phase at a time, in order.** Phases 0–5 and 8 are done, phase 9 too except the deploy (9.2, deferred: the user wants the UI on localhost). The user skipped phases 6–7 on 2026-10-20: task 6.1 is still open and phase 7 is not started. Phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `fundscope.llm` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline; phase 4 made the tool-calling agent the only entrypoint; phase 5 reworked retrieval (bigger chunks, multilingual embeddings, hybrid BM25 search, key facts) and added the full-context engine. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
 - Tick tasks `[x]` in `TODO.md` as they are completed.
 - **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`uv run fundscope-setup --rebuild`), run `uv run ruff check .` and `uv run pytest -q`, then run the pipeline + evaluation with the judge (`--judge llm --compare evaluation/baseline_cloud.json`) and report the metric deltas against the baseline before moving on.
 - **Work only on `main` — never create branches.** Commit after each completed task, with a message that starts with the task number (e.g. `2.3: OpenAI-compatible backend`); push to `origin/main` at the end of each phase.
@@ -29,7 +29,7 @@ Every CLI takes `-v/--verbose` (INFO logs to stderr via `fundscope.log.setup_log
 ```bash
 uv sync
 uv run ruff check .                 # lint (config in pyproject.toml: pyflakes + a few bug rules)
-uv run pytest -q                    # 55 tests, ~1 min, no network / API key (see tests/conftest.py)
+uv run pytest -q                    # 61 tests, ~2 min, no network / API key (see tests/conftest.py)
 
 # Full setup: checks deps, PDFs, LLM key + ping; ingests data/raw/ via src/fundscope/metadata.json, builds the index
 fundscope-setup [--rebuild] [--skip_ingest] [--skip_llm_check]        # = python -m fundscope.bootstrap
@@ -43,7 +43,8 @@ python -m fundscope.embed --input_dir data/processed/ --db_path index/chroma_db/
 python -m fundscope.retrieve --query "..." --etf_isin IE00B4L5Y983 --doc_type factsheet [--mode comparative --isin_list A B] [--json] [--vector_only]
 
 # Entrypoints
-fundscope [--query "..."] [--show_calls] [--show_chunks] [--show_cost] [--provider ...] [--model ...]  # tool-calling agent (= python -m fundscope[.agent]; fundscope.ask is an alias)
+fundscope [--port N] [--no-browser]                                   # web UI: starts Streamlit and opens the browser
+fundscope-cli [--query "..."] [--show_calls] [--show_chunks] [--show_cost] [--provider ...] [--model ...]  # terminal agent (= python -m fundscope[.agent]; fundscope.ask is an alias)
 python -m fundscope.fullcontext --query "..." [--show_cost]          # no retrieval: every document in the cached prompt
 python -m fundscope.registry                                         # print the fund registry
 python -m fundscope.live_data --isin IE00B4L5Y983 [--no_cache]       # yfinance market data (disk cache, TTL LIVE_DATA_TTL_S, default 1 h)
@@ -56,6 +57,8 @@ python evaluation/run_retrieval.py [--limit N]          # retrieval only, no LLM
 ```
 
 Single question through the batch pipeline: `fundscope-pipeline --query "..."` (agent); the fixed RAG path takes routing hints: `fundscope-pipeline --engine rag --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
+
+**Web UI** (`src/fundscope/ui/`): `launch.py` (the `fundscope` command) runs `streamlit run app.py` in-process with `--server.headless false` (opens the browser), a light theme and `--server.fileWatcherType none` (the watcher walks transformers' lazy submodules and floods the log), and sets `HF_HUB_OFFLINE=1` when the embedding model is already in the HF cache. `app.py` is the page (tabs Ask / Live data / Evaluation / How it works); the retriever is an `st.cache_resource`, the `Agent` lives in `st.session_state` (keeps the history; rebuilt when provider/model change) and reports tool calls live through `Agent(on_tool_call=...)`. Non-UI logic (citation badges, `$` escaping, the disclaimer rule, `REPORTS` shown in Evaluation) is in `backend.py`. `tests/test_ui.py` runs the app with `streamlit.testing.v1.AppTest`, patching `backend.load_retriever`, `backend.build_agent` and `live_data` (no network). Single light theme on purpose: chart and diagram colours are picked for it.
 
 **Tests** (`tests/`): `conftest.py` builds a temporary ChromaDB index from `SAMPLE_CHUNKS` with `HashingEmbedder` (monkeypatched over `retrieve.SentenceTransformer`), and resets the `SESSION` cost tracker before each test. LLM tests use a `ScriptedLLM(LLMClient)` or replace the SDK method (`client._client.messages.create`) with a recorder returning `anthropic.types.Message` / `openai...ChatCompletion` objects. `test_ingest.py` generates its own PDF (`make_pdf`) and, when `data/raw/` holds the corpus, checks re-ingestion reproduces `data/processed/` chunk ids. `pytest` puts `evaluation/` on the path (`import evaluate`). **CI** (`.github/workflows/ci.yml`): `uv sync --locked`, ruff, pytest; the retrieval-only gate runs only if `data/raw/*.pdf` exist (the user chose not to version the PDFs).
 

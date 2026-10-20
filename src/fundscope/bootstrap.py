@@ -242,8 +242,9 @@ def main():
         print("""
   You can now ask questions:
 
-    fundscope                         ← interactive mode
-    fundscope --query "your question" ← single question
+    fundscope                             ← web UI (opens the browser)
+    fundscope-cli                         ← terminal chat
+    fundscope-cli --query "your question" ← single question
 """)
     else:
         print("""
@@ -256,7 +257,7 @@ def main():
     cp .env.example .env        then set ANTHROPIC_API_KEY (or another provider)
     python -m fundscope.llm.cli --ping
   Then ask questions with:
-    fundscope
+    fundscope            (web UI)  or  fundscope-cli   (terminal)
 """)
 
 

@@ -14,12 +14,14 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "rank-bm25>=0.2.2",
     "sentence-transformers>=6.1.0",
+    "streamlit>=1.66.0",
     "torch>=2.14.0",
     "yfinance>=1.7.0",
 ]
 
 [project.scripts]
-fundscope          = "fundscope.agent:main"
+fundscope          = "fundscope.ui.launch:main"
+fundscope-cli      = "fundscope.agent:main"
 fundscope-setup    = "fundscope.bootstrap:main"
 fundscope-pipeline = "fundscope.pipeline:main"
 

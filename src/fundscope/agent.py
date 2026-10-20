@@ -29,7 +29,7 @@ Requirements:
 
 Usage:
     # Interactive agent mode
-    fundscope                     (= python -m fundscope.agent)
+    fundscope-cli                 (= python -m fundscope.agent; `fundscope` starts the web UI)
 
     # Single question
     python -m fundscope.agent --query "How has the iShares MSCI World performed this year?"
@@ -47,7 +47,7 @@ import json
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 # ── Local imports ──────────────────────────────────────────────────────────────
 from fundscope.config import INDEX_PATH as DB_PATH
@@ -428,12 +428,14 @@ class Agent:
         show_calls: bool = False,
         llm: LLMClient = None,
         history_turns: int = HISTORY_TURNS,
+        on_tool_call: Optional[Callable[[str, dict], None]] = None,
     ):
         self._llm      = llm or get_llm("generator", provider, model)
         self._executor = ToolExecutor(retriever)
         self._system   = build_system_prompt()
         self._show_calls = show_calls
         self._history_turns = history_turns
+        self._on_tool_call = on_tool_call             # e.g. the web UI's live status
         self._history: list[tuple[str, str]] = []     # (question, resolved answer)
         logger.info("Provider: %s  |  Model: %s", self._llm.provider, self._llm.model)
 
@@ -506,6 +508,8 @@ class Agent:
                     # Malformed arguments: tell the model so it can retry
                     output, is_error = f"[tool error] {tc.error}", True
                 else:
+                    if self._on_tool_call:
+                        self._on_tool_call(tc.name, tc.arguments)
                     try:
                         output = self._executor.execute(
                             tc.name, tc.arguments, show_calls=self._show_calls

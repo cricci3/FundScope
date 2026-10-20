@@ -56,7 +56,7 @@ Embeddings and retrieval run locally; only answer generation calls the LLM provi
 FundScope/
 │
 ├── src/fundscope/                # The Python package (installed in editable mode by `uv sync`)
-│   ├── agent.py                  # Entrypoint (`fundscope`) — tool-calling agent: docs search + live data
+│   ├── agent.py                  # Tool-calling agent: docs search + live data (`fundscope-cli` in the terminal)
 │   ├── ask.py                    # Alias of agent.py
 │   ├── bootstrap.py              # One-command setup (`fundscope-setup`): checks, ingest, index
 │   ├── citations.py              # [Chunk N] citations → real source metadata
@@ -71,6 +71,10 @@ FundScope/
 │   ├── generate.py               # Fixed RAG pipeline: prompt templates + LLM call (--engine rag)
 │   ├── fullcontext.py            # Full-context engine (--engine full)
 │   ├── pipeline.py               # Batch runner over the ground truth (`fundscope-pipeline`)
+│   ├── ui/                       # Web UI (Streamlit)
+│   │   ├── launch.py             #   `fundscope`: starts the server and opens the browser
+│   │   ├── app.py                #   the page: Ask, Live data, Evaluation, How it works
+│   │   └── backend.py            #   formatting, evaluation reports, agent builder (tested without a browser)
 │   └── llm/                      # Provider-neutral LLM layer
 │       ├── base.py               #   Message, ToolSpec, LLMResponse, LLMClient, cost tracker
 │       ├── anthropic_backend.py  #   Native Anthropic backend (default)
@@ -112,7 +116,7 @@ Python 3.13 and [uv](https://docs.astral.sh/uv/) are required.
 uv sync
 ```
 
-This creates `.venv` with every dependency and installs FundScope itself as the `fundscope` package (editable), with three commands: `fundscope` (the agent), `fundscope-setup` and `fundscope-pipeline`. Prefix commands with `uv run` (e.g. `uv run fundscope`), or activate `.venv`. The other modules run as `python -m fundscope.<module>` (e.g. `uv run python -m fundscope.retrieve --help`).
+This creates `.venv` with every dependency and installs FundScope itself as the `fundscope` package (editable), with four commands: `fundscope` (the web UI), `fundscope-cli` (the agent in the terminal), `fundscope-setup` and `fundscope-pipeline`. Prefix commands with `uv run` (e.g. `uv run fundscope`), or activate `.venv`. The other modules run as `python -m fundscope.<module>` (e.g. `uv run python -m fundscope.retrieve --help`).
 
 ### LLM provider
 
@@ -191,7 +195,7 @@ OPENROUTER_API_KEY=sk-or-...
 (Model names for non-Anthropic providers are examples — check the provider's model list.) For a single run, override from the CLI instead:
 
 ```bash
-uv run fundscope --provider groq --model llama-3.3-70b-versatile
+uv run fundscope-cli --provider groq --model llama-3.3-70b-versatile
 uv run python -m fundscope.llm.cli --ping --provider gemini --model gemini-2.5-flash
 ```
 
@@ -208,7 +212,7 @@ Optionally add the model's prices to `src/fundscope/llm/pricing.py`; models with
 
 Indicative prices (per million tokens, input / output): Claude Haiku 4.5 $1 / $5, Claude Sonnet 5.5 $2 / $10. A typical answer uses ~1,000 input and ~100–350 output tokens, i.e. **≈ $0.001–0.003 per question**; a full 22-question agent run costs ≈ $0.15 and judging it ≈ $0.20 (see Results).
 
-- `--show_cost` on `fundscope` prints the tokens and estimated cost of every answer.
+- `--show_cost` on `fundscope-cli` prints (the web UI always shows it) the tokens and estimated cost of every answer.
 - `fundscope-pipeline` and `evaluate.py` print the run total (pipeline + judge); each run file stores per-question and total tokens and cost.
 - `LLM_MAX_COST_USD` caps what one run can spend.
 - `fundscope-pipeline --limit N` / `--qids T1_001 T2_003` run only a subset — use them while developing.
@@ -249,7 +253,7 @@ uv run fundscope-setup
 ```
 
 This single command checks the dependencies, the PDFs and the LLM provider (key present + a minimal `--ping`), ingests your PDFs, and builds the vector index.
-Once it completes, `fundscope` is ready to use.
+Once it completes, `uv run fundscope` opens the web UI (or use `fundscope-cli` in the terminal).
 
 **Options:**
 
@@ -271,13 +275,34 @@ You can use retrieval-only evaluation without a model — see the Evaluation sec
 
 ## Asking questions
 
-### Interactive mode (recommended)
+### Web UI (recommended)
 
 ```bash
-uv run fundscope
+uv run fundscope                  # starts http://localhost:8501 and opens it in the browser
+uv run fundscope --port 8600      # another port
+uv run fundscope --no-browser     # server only
 ```
 
-This opens a prompt where you type questions in plain English (`fundscope` runs `fundscope.agent`; `fundscope.ask` is an alias). The LLM agent decides which funds, documents and retrieval mode to search, searches again with other wording if the first results miss the answer, and cites the chunks it used; the code turns each `[Chunk N]` citation into the real source metadata. Follow-up questions work: the last 5 questions and answers are remembered until you type `reset`.
+A local Streamlit app, built to demo the project:
+
+- **Ask** — chat with the agent. Each answer shows its citations as coloured source badges, the live list of tool
+  calls while it works, the tool calls and the retrieved chunks (cited ones marked) on demand, and the tokens and
+  cost of the answer. Provider and model can be switched from the sidebar; *New conversation* clears the memory.
+- **Live data** — price, returns, 52-week range, volume and a 12-month price chart from Yahoo Finance.
+- **Evaluation** — the reference runs side by side (judge pass rate, correctness, groundedness, retrieval, cost).
+- **How it works** — the architecture diagram and the main design choices.
+
+The first question after a start waits ~10–30 s for the embedding model to load; the other tabs work immediately,
+and also without an API key. Answers that compare funds or talk about suitability carry a "not financial advice"
+note, which is also in the sidebar. Stop the server with Ctrl+C in the terminal.
+
+### Terminal
+
+```bash
+uv run fundscope-cli
+```
+
+This opens a prompt where you type questions in plain English (`fundscope-cli` runs `fundscope.agent`; `python -m fundscope` and `fundscope.ask` are aliases). The LLM agent decides which funds, documents and retrieval mode to search, searches again with other wording if the first results miss the answer, and cites the chunks it used; the code turns each `[Chunk N]` citation into the real source metadata. Follow-up questions work: the last 5 questions and answers are remembered until you type `reset`.
 
 ```
 ════════════════════════════════════════════════════════════════
@@ -316,13 +341,13 @@ Available commands inside the prompt:
 ### Single question mode
 
 ```bash
-uv run fundscope --query "What is the Summary Risk Indicator of IE00B4L5Y983?" --show_cost
+uv run fundscope-cli --query "What is the Summary Risk Indicator of IE00B4L5Y983?" --show_cost
 ```
 
 ### With source chunk inspection
 
 ```bash
-uv run fundscope --query "Compare the replication methods of both ETFs" --show_chunks
+uv run fundscope-cli --query "Compare the replication methods of both ETFs" --show_chunks
 ```
 
 This prints the retrieved chunks before the answer, showing exactly what the model was given — useful for understanding why an answer is correct or incorrect.
@@ -330,7 +355,7 @@ This prints the retrieved chunks before the answer, showing exactly what the mod
 ### Tool calls and live data
 
 ```bash
-uv run fundscope --query "How has the iShares Core MSCI World ETF performed this year?" --show_calls --show_cost
+uv run fundscope-cli --query "How has the iShares Core MSCI World ETF performed this year?" --show_calls --show_cost
 ```
 
 The model decides which tools to call: document search (`search_etf_docs`, with optional ISINs, issuer, document type, year and mode — single, comparative or cross-document), live market data (yfinance), or the list of available ETFs. `--show_calls` prints each call.
@@ -338,7 +363,7 @@ The model decides which tools to call: document search (`search_etf_docs`, with 
 ### Specifying a different provider or model
 
 ```bash
-uv run fundscope --provider groq --model llama-3.3-70b-versatile
+uv run fundscope-cli --provider groq --model llama-3.3-70b-versatile
 ```
 
 ---
@@ -470,7 +495,7 @@ than the minimum the question needs.
 ```bash
 uv sync                     # also installs pytest and ruff (dev group)
 uv run ruff check .         # lint
-uv run pytest -q            # ~55 tests, ~1 min; no network, no API key
+uv run pytest -q            # ~60 tests, ~2 min; no network, no API key
 ```
 
 The tests never call an LLM or download a model: the embedding model is replaced by a hashing

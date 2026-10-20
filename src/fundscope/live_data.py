@@ -196,6 +196,22 @@ def get_etf_live_data(isin_or_ticker: str, period_months: int = 12,
     return data
 
 
+def get_price_history(isin_or_ticker: str, period_months: int = 12) -> list[tuple[str, float]]:
+    """
+    Daily closes as [(YYYY-MM-DD, close), ...] for charts (the web UI). Not cached
+    on disk — callers cache it — and [] when the ticker is unknown or Yahoo fails.
+    """
+    fund   = get_fund(isin_or_ticker)
+    ticker = fund.yahoo_ticker if fund is not None else isin_or_ticker
+    if not ticker:
+        return []
+    try:
+        hist = yf.Ticker(ticker).history(period=f"{period_months}mo")
+    except Exception:
+        return []
+    return [(d.strftime("%Y-%m-%d"), round(float(c), 4)) for d, c in hist["Close"].items()]
+
+
 # ── Prompt formatter ───────────────────────────────────────────────────────────
 
 def format_for_prompt(data: dict) -> str:

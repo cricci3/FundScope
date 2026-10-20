@@ -53,7 +53,7 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
   - L'avvio è lento (~40 s: import + modello e5-base da 1,1 GB); con `HF_HUB_OFFLINE=1` si evitano i controlli di rete su Hugging Face.
   - Judge non deterministico (±1 domanda tra run).
 - **Decisioni recenti:** embedding `intfloat/multilingual-e5-base` (l'indice registra il modello; cambiarlo richiede `setup.py --rebuild`); ground truth a 22 domande (le 5 italiane in coda); `baseline_cloud.json` resta la baseline ufficiale (promozione di un report di fase 4/5 non decisa).
-- **Prossimo passo:** fase 9 (UI) per scelta dell'utente; restano aperti 6.1 (ticker UBS) e la fase 7 (corpus).
+- **Prossimo passo:** fase 9 fatta (UI locale, `uv run fundscope`; deploy 9.2 rinviato). Restano aperti 6.1 (ticker UBS: nella tab Live data compare l'errore di Yahoo) e la fase 7 (corpus).
 
 ---
 
@@ -345,9 +345,11 @@ Lettura:
 
 ## Fase 9 — Interfaccia e pubblicazione (opzionale, per portfolio)
 
-- [ ] **9.1 UI web** — Streamlit o Gradio: chat, fonti/chunk usati, pannello dati live, selettore provider/modello.
-- [ ] **9.2 Deploy gratuito** — Hugging Face Spaces o Streamlit Community Cloud, chiave API come secret; indice costruito al primo avvio o committato come artefatto.
-- [ ] **9.3 Disclaimer** — "non è consulenza finanziaria" nella UI e nelle risposte che confrontano l'idoneità dei fondi.
+- [x] **9.1 UI web** — Streamlit o Gradio: chat, fonti/chunk usati, pannello dati live, selettore provider/modello.
+  - *Esito (20/10/2026): Streamlit, in locale. `uv run fundscope` avvia il server e apre il browser (`fundscope/ui/launch.py`; `--port`, `--no-browser`); il vecchio comando terminale è ora `fundscope-cli`. Tab: **Ask** (chat con l'agent, citazioni come badge colorati per fondo, tool call mostrate dal vivo tramite il nuovo `Agent(on_tool_call=...)`, chunk recuperati con quelli citati evidenziati, token e costo per risposta, domande di esempio), **Live data** (metriche Yahoo + grafico 12 mesi, nuova `live_data.get_price_history`), **Evaluation** (le 4 run di riferimento: metriche, grafico, tabella), **How it works** (diagramma + scelte progettuali). Sidebar: provider/modello, costo della sessione, corpus, disclaimer. Senza chiave API la chat è disattivata con le istruzioni, le altre tab funzionano. Verificata con screenshot (Playwright) e con l'API reale (2 domande, ≈ 0,02 $); 6 test in `tests/test_ui.py` (AppTest, nessuna rete).*
+- [ ] **9.2 Deploy gratuito** *(rinviato: l'utente vuole la UI in locale, 20/10/2026)* — Hugging Face Spaces o Streamlit Community Cloud, chiave API come secret; indice costruito al primo avvio o committato come artefatto.
+- [x] **9.3 Disclaimer** — "non è consulenza finanziaria" nella UI e nelle risposte che confrontano l'idoneità dei fondi.
+  - *Esito (20/10/2026): testo fisso nella sidebar; sotto ogni risposta la cui domanda (o il cui inizio) parla di idoneità o confronto ("suitable", "better", "recommend", "adatto", "migliore", "conviene"…, `backend.needs_disclaimer`). Aggiunto dalla UI, non dal prompt: le risposte valutate non cambiano.*
 
 ---
 
