@@ -1,8 +1,0 @@
-openai
-argparse
-pathlib
-typing
-pdfplumber
-chromadb
-sentence-transformers
-yfinance
