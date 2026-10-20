@@ -28,8 +28,6 @@ Usage:
 Only JSON files matching an entry in metadata.json (by ingest.build_output_stem)
 are indexed; anything else in the input dir is logged and ignored.
 
-Install:
-    pip install chromadb sentence-transformers
 """
 
 import logging

@@ -367,8 +367,9 @@ def split_text(text: str, chunk_size: int, chunk_overlap: int) -> list[tuple[str
             else:
                 if current.strip():
                     results.append((current.strip(), current_start))
-                    overlap = current[-chunk_overlap:] if len(current) > chunk_overlap else current
-                    current = overlap + connector + part
+                    # current[-0:] would be the whole chunk
+                    overlap = current[-chunk_overlap:] if chunk_overlap > 0 else ""
+                    current = overlap + connector + part if overlap else part
                     current_start = running_offset - len(overlap)
                 else:
                     if len(seps) > 1:
