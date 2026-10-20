@@ -1,0 +1,41 @@
+# Lint + tests on every push. No API key here: the tests mock every LLM call and
+# the embedding model, and generation is evaluated by hand (see CLAUDE.md).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Tests
+        run: uv run pytest -q
+
+      # The corpus PDFs are not versioned (data/raw/ is git-ignored), so this step
+      # only runs where they are present. It builds the index with the real
+      # embedding model (~1.1 GB download) and fails below the recall threshold.
+      - name: Retrieval evaluation (no LLM)
+        if: hashFiles('data/raw/*.pdf') != ''
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          uv run fundscope-setup --skip_llm_check
+          uv run python evaluation/run_retrieval.py --output retrieval_run.json
+          uv run python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json \
+            --pipeline_output retrieval_run.json --report retrieval_report.json \
+            --retrieval_only --min_recall 0.95

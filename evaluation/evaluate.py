@@ -749,6 +749,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Only evaluate the first N (selected) questions")
     p.add_argument("--compare",         type=Path, default=None,
                    help="Earlier report (e.g. evaluation/baseline_cloud.json) to print deltas against")
+    p.add_argument("--min_recall",      type=float, default=None,
+                   help="Exit with status 1 if the mean retrieval recall is below this (CI gate)")
     add_verbose_flag(p)
     return p
 
@@ -832,6 +834,10 @@ def main():
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Full report → {args.report}")
+
+    recall = summary["overall"]["retrieval_recall_mean"]
+    if args.min_recall is not None and recall < args.min_recall:
+        raise SystemExit(f"Retrieval recall {recall:.3f} is below --min_recall {args.min_recall}")
 
 
 if __name__ == "__main__":

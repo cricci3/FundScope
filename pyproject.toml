@@ -14,6 +14,7 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "rank-bm25>=0.2.2",
     "sentence-transformers>=6.1.0",
+    "torch>=2.14.0",
     "yfinance>=1.7.0",
 ]
 
@@ -21,6 +22,15 @@ dependencies = [
 fundscope          = "fundscope.agent:main"
 fundscope-setup    = "fundscope.bootstrap:main"
 fundscope-pipeline = "fundscope.pipeline:main"
+
+# CPU-only torch on Linux (CI, deploy): the default PyPI wheel bundles CUDA (several GB)
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["hatchling"]
