@@ -48,7 +48,6 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 - **Problemi aperti / scoperti:**
   - Da verificare con l'utente: dopo il fix `0127564` (prompt email di Streamlit disattivato, server solo su localhost) `uv run fundscope` deve aprire il browser da solo. L'utente aveva segnalato il prompt email e la pagina che non si apriva; il fix è stato provato solo con stdin chiuso (server su e raggiungibile), non guardando lo schermo dell'utente.
   - L'utente non vuole componenti che chiedono login/email: se Streamlit dà ancora fastidio, alternativa proposta Gradio.
-  - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (task 6.1): nella tab Live data della UI compare l'errore.
   - Groundedness dell'agent ~73%: Haiku aggiunge spiegazioni assenti dai documenti. T2_001: sceglie lo 0,1% del KID invece del TER 0,06% del factsheet.
   - Full context (pass 81.8%) batte l'agent (68.2%) su questo corpus piccolo: da riconsiderare dopo la fase 7. Judge non deterministico (±1 domanda).
   - Una prova CLI ha ricevuto "invalid API key" (401) e pochi minuti dopo la stessa chiave funzionava dalla UI: causa non chiarita, da verificare se si ripete.
@@ -302,7 +301,8 @@ Lettura:
 
 ## Fase 6 — Dati di mercato (`src/live_data.py`)
 
-- [ ] **6.1 Verificare il ticker UBS** — `0P0001FMRI.L` sembra un ID fondo, non il ticker di borsa dell'ETF; trovare il ticker Yahoo corretto (Xetra/Borsa Italiana) e spostarlo in `metadata.json` (4.3).
+- [x] **6.1 Verificare il ticker UBS** — `0P0001FMRI.L` sembra un ID fondo, non il ticker di borsa dell'ETF; trovare il ticker Yahoo corretto (Xetra/Borsa Italiana) e spostarlo in `metadata.json` (4.3).
+  - *Esito (20/10/2026): `0P0001FMRI.L` dà 404 su Yahoo. `yf.Search("IE00BD4TXV59")` → `UETW.DE` (Xetra, EUR, "UBS Core MSCI World UCITS ETF USD acc"), coerente con `EUNL.DE` per iShares; altri listing della stessa classe: `WRDA.L`, `WRDA.MI`, `WRDUSW.SW`. Attenzione: `SWRD` è lo SPDR MSCI World, non l'UBS.*
 - [x] **6.2 Unità dei rendimenti** — verificare se `ytdReturn`, `threeYearAverageReturn`, `fiveYearAverageReturn` sono frazioni (0.12) e in tal caso moltiplicare ×100 prima di `fmt_pct`.
   - *Esito (07/10/2026, yfinance 1.7.0, verificato su URTH e SPY): unità miste — `ytdReturn` è già in percentuale (11.74), le medie 3y/5y sono frazioni (0.2245 → ×100). Prima il prompt riportava "3Y Avg: +0.22%".*
   - I listing europei (EUNL.DE, IWDA.AS, SWDA.L) restituiscono `None` per tutti e tre i campi e per `totalAssets`: lo YTD ora si calcola dallo storico prezzi (ultima chiusura dell'anno precedente → oggi), che viene scaricato per almeno 12 mesi; dallo stesso storico si calcolano 52w high/low (se mancano in `info`) e i rendimenti a 1/3 mesi. Lo storico è aggiustato per i dividendi, quindi lo YTD calcolato può differire da quello di Yahoo (URTH: 12.65% vs 11.74%).
