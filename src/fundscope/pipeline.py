@@ -32,30 +32,30 @@ Batch output (--run_eval) is what evaluate.py expects:
 Usage:
 
     # Single query with the agent
-    python src/pipeline.py --query "What is the TER of IE00B4L5Y983?"
+    python -m fundscope.pipeline --query "What is the TER of IE00B4L5Y983?"
 
     # Single query with the fixed RAG pipeline (filters apply to --engine rag only)
-    python src/pipeline.py --engine rag --query "What is the TER of IE00B4L5Y983?" \
+    python -m fundscope.pipeline --engine rag --query "What is the TER of IE00B4L5Y983?" \
                        --etf_isin IE00B4L5Y983 --doc_type factsheet \
                        --query_type 1
 
     # Comparative query (rag)
-    python src/pipeline.py --engine rag \
+    python -m fundscope.pipeline --engine rag \
                        --query "Compare the ongoing charges of IE00B4L5Y983 and IE00BD4TXV59" \
                        --isin_list IE00B4L5Y983 IE00BD4TXV59 \
                        --doc_type factsheet --query_type 2
 
     # Run all ground truth questions; output goes to
     # evaluation/runs/<timestamp>_<model>_agent.json (rag: <timestamp>_<model>.json)
-    python src/pipeline.py --run_eval
-    python src/pipeline.py --run_eval --engine rag
+    python -m fundscope.pipeline --run_eval
+    python -m fundscope.pipeline --run_eval --engine rag
 
     # Development: only a subset (keeps the API cost low)
-    python src/pipeline.py --run_eval --limit 3
-    python src/pipeline.py --run_eval --qids T1_001 T2_003
+    python -m fundscope.pipeline --run_eval --limit 3
+    python -m fundscope.pipeline --run_eval --qids T1_001 T2_003
 
     # Explicit output path
-    python src/pipeline.py --run_eval --output evaluation/pipeline_output.json
+    python -m fundscope.pipeline --run_eval --output evaluation/pipeline_output.json
 
     # Then score:
     python evaluate.py --ground_truth evaluation/ground_truth.json \
@@ -70,10 +70,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from config import INDEX_PATH, EVAL_DIR
-from retrieve import Retriever, RetrievedChunk, route_query
-from generate import Generator, GenerationResult
-from llm import PROVIDERS, SESSION, BudgetExceededError
+from fundscope.config import INDEX_PATH, EVAL_DIR
+from fundscope.retrieve import Retriever, RetrievedChunk, route_query
+from fundscope.generate import Generator, GenerationResult
+from fundscope.llm import PROVIDERS, SESSION, BudgetExceededError
+from fundscope.log import add_verbose_flag, setup_logging
 
 ENGINES = ["agent", "rag", "full"]
 
@@ -491,19 +492,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--db_path",  type=Path, default=DB_PATH)
     p.add_argument("--show_chunks", action="store_true",
                    help="Print retrieved chunk previews")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    setup_logging(args.verbose)
 
     retriever = Retriever(db_path=args.db_path) if args.engine != "full" else None
     generator = agent = None
     if args.engine == "full":
-        from fullcontext import FullContextAnswerer
+        from fundscope.fullcontext import FullContextAnswerer
         agent = FullContextAnswerer(provider=args.provider, model=args.model)
     elif args.engine == "agent":
-        from agent import Agent
+        from fundscope.agent import Agent
         # history_turns=0: every question is answered independently
         agent = Agent(retriever, provider=args.provider, model=args.model, history_turns=0)
     else:

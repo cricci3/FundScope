@@ -1,7 +1,7 @@
 """
 llm — Provider-neutral LLM access for FundScope
 
-    from llm import get_llm, Message, ToolSpec, SESSION
+    from fundscope.llm import get_llm, Message, ToolSpec, SESSION
 
     llm  = get_llm("generator")                    # provider/model from .env
     resp = llm.chat([Message("user", "Hi")], system="Be brief.")
@@ -13,12 +13,12 @@ Precedence for provider and model: explicit arguments (CLI --provider/--model)
 
 import os
 
-import config
-from llm.base import (
+from fundscope import config
+from fundscope.llm.base import (
     SESSION, BudgetExceededError, CostTracker, LLMClient, LLMError, LLMResponse,
     Message, ToolCall, ToolSpec, Usage,
 )
-from llm.openai_compat import OPENAI_COMPAT_PROVIDERS
+from fundscope.llm.openai_compat import OPENAI_COMPAT_PROVIDERS
 
 PROVIDERS = ["anthropic", *OPENAI_COMPAT_PROVIDERS]
 
@@ -64,8 +64,8 @@ def get_llm(role: str = "generator", provider: str | None = None,
         raise LLMError(f"{key_var} is not set. Copy .env.example to .env and add the key.")
 
     if provider == "anthropic":
-        from llm.anthropic_backend import AnthropicClient
+        from fundscope.llm.anthropic_backend import AnthropicClient
         return AnthropicClient(model, api_key, config.LLM_MIN_INTERVAL_S)
 
-    from llm.openai_compat import OpenAICompatClient
+    from fundscope.llm.openai_compat import OpenAICompatClient
     return OpenAICompatClient(provider, model, api_key, config.LLM_MIN_INTERVAL_S)

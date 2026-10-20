@@ -12,17 +12,18 @@ the same output schema (list of Chunk objects).
 
 Usage:
 
-    python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
+    python -m fundscope.ingest --batch data/raw/ --config src/fundscope/metadata.json --output_dir data/processed/
 
     # Single file (type inferred from --type flag)
-    python src/ingest.py --pdf data/raw/iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf \
+    python -m fundscope.ingest --pdf data/raw/iShares_Core_MSCI_World_UCITS_ETF_USD_acc_kid.pdf \
                      --isin EUNL --issuer ishares --category "MSCI World" \
                      --year 2023 --type kid --currency USD --share_class acc
 
     # Batch with config JSON (recommended)
-    python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
+    python -m fundscope.ingest --batch data/raw/ --config src/fundscope/metadata.json --output_dir data/processed/
 """
 
+import logging
 import re
 import json
 import hashlib
@@ -31,12 +32,12 @@ from pathlib import Path
 from dataclasses import dataclass, asdict, field
 from typing import Optional
 
-try:
-    import pdfplumber
-except ImportError:
-    raise ImportError("pdfplumber is required: pip install pdfplumber")
+import pdfplumber
 
-from config import DATA_PROCESSED, CHUNK_SIZES, CHUNK_OVERLAPS
+from fundscope.log import add_verbose_flag, setup_logging
+from fundscope.config import DATA_PROCESSED, CHUNK_SIZES, CHUNK_OVERLAPS
+
+logger = logging.getLogger(__name__)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -239,7 +240,7 @@ _KID_KF_PATTERNS = {
     "currency":                   r"(?:denominated in|Currency of denomination)\s*:?\s*(US Dollar|Euro|[A-Z]{3}\b)",
     "cost_entry":                 r"Entry costs?\s*:?\s*(" + _PCT + ")|(We do not charge an entry fee)",
     "cost_exit":                  r"Exit costs?\s*:?\s*(" + _PCT + ")|(We do not charge an exit fee)",
-    "cost_ongoing":               r"Management fees and(?: other)?\s+(" + _PCT + ")|Ongoing costs?\s*:?\s*(" + _PCT + ")",
+    "cost_ongoing":               r"Management fees and(?: other)?\s+(" + _PCT + r")|Ongoing costs?\s*:?\s*(" + _PCT + ")",
     "cost_performance":           r"Performance fees?\s*:?\s*(" + _PCT + ")|(There is no performance fee for this product)",
     "cost_transaction":           r"Transaction costs?\s*:?\s*(" + _PCT + ")",
     "srri":                       r"classified this product as (\d) out of 7|Summary Risk Indicator\s*:?\s*(\d)\b",
@@ -764,11 +765,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config",      type=Path,
                    help="JSON config mapping filenames to metadata (required for --batch)")
     p.add_argument("--no_dedup",    action="store_true")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    setup_logging(args.verbose)
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.pdf:
@@ -800,7 +803,7 @@ def main():
         for pdf_path in pdf_files:
             fname = pdf_path.name
             if fname not in config:
-                print(f"  [skip] No config entry for: {fname}")
+                logger.warning("[skip] No config entry for: %s", fname)
                 skipped.append(fname)
                 continue
             entry = config[fname]

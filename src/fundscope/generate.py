@@ -2,56 +2,34 @@
 generate.py — Prompt construction + LLM call
 ETF RAG Project — Phase 4
 
-The model is reached through the provider-neutral interface in src/llm/
+The model is reached through the provider-neutral interface in src/fundscope/llm/
 (provider and model come from .env — see .env.example).
 
 Usage:
     # Test generate.py standalone (pipe in chunks from retrieve.py)
-    python src/retrieve.py --query "What is the TER of IE00B4L5Y983?" \\
+    python -m fundscope.retrieve --query "What is the TER of IE00B4L5Y983?" \\
                            --etf_isin IE00B4L5Y983 --doc_type factsheet \\
                            --json > /tmp/chunks.json
 
-    python src/generate.py --query "What is the TER of IE00B4L5Y983?" \\
+    python -m fundscope.generate --query "What is the TER of IE00B4L5Y983?" \\
                            --chunks_file /tmp/chunks.json --query_type 1
 """
 
+import logging
 import json
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
-from citations import book_from_chunks, chunk_header, resolve_citations
-from citations import CITATION_PATTERN, CitedSource, parse_citations  # noqa: F401 (re-exported)
+from fundscope.llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
+from fundscope.citations import book_from_chunks, chunk_header, resolve_citations
+from fundscope.citations import CITATION_PATTERN, CitedSource, parse_citations  # noqa: F401 (re-exported)
 
-try:
-    from retrieve import RetrievedChunk
-except ImportError:
-    @dataclass
-    class RetrievedChunk:
-        chunk_id: str = ""
-        text: str = ""
-        score: float = 0.0
-        etf_isin: str = ""
-        etf_ticker: str = ""
-        issuer: str = ""
-        doc_type: str = ""
-        year: int = 0
-        quarter: str = ""
-        section_heading: str = ""
-        block_type: str = "text"
-        page_number: int = -1
-        source_file: str = ""
+from fundscope.log import add_verbose_flag, setup_logging
+from fundscope.retrieve import RetrievedChunk
 
-        def as_context_string(self) -> str:
-            source = (
-                f"[{self.etf_isin} | {self.issuer} | {self.doc_type} | "
-                f"{self.year}{' ' + self.quarter if self.quarter else ''} | "
-                f"section: {self.section_heading or 'unknown'} | "
-                f"type: {self.block_type}]"
-            )
-            return f"{source}\n{self.text}"
+logger = logging.getLogger(__name__)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -167,7 +145,7 @@ PROMPT_BUILDERS = {
 # ── Generator ─────────────────────────────────────────────────────────────────
 
 class Generator:
-    """Builds the RAG prompt and calls the configured LLM (see src/llm/)."""
+    """Builds the RAG prompt and calls the configured LLM (see src/fundscope/llm/)."""
 
     def __init__(
         self,
@@ -176,7 +154,7 @@ class Generator:
         llm: Optional[LLMClient] = None,
     ):
         self._llm = llm or get_llm("generator", provider, model)
-        print(f"[generate] Provider: {self._llm.provider}  |  Model: {self._llm.model}")
+        logger.info("Provider: %s  |  Model: %s", self._llm.provider, self._llm.model)
 
     @property
     def provider(self) -> str:
@@ -210,12 +188,12 @@ class Generator:
         )
 
         if response.stop_reason == "max_tokens":
-            print(f"[generate] [warn] answer truncated at max_tokens={MAX_TOKENS}")
+            logger.warning("answer truncated at max_tokens=%d", MAX_TOKENS)
 
         book     = book_from_chunks(chunks)
         resolved = resolve_citations(response.text, book)
         if resolved.unknown_refs:
-            print(f"[generate] [warn] cited unknown chunk(s): {resolved.unknown_refs}")
+            logger.warning("cited unknown chunk(s): %s", resolved.unknown_refs)
 
         return GenerationResult(
             query=query,
@@ -251,17 +229,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Model id (default: LLM_MODEL from .env, else provider default)")
     p.add_argument("--show_context", action="store_true",
                    help="Print the full context sent to the model")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    setup_logging(args.verbose)
 
     if args.chunks_file:
         raw    = json.loads(Path(args.chunks_file).read_text(encoding="utf-8"))
         chunks = [RetrievedChunk(**c) for c in raw]
     else:
-        print("[warn] No --chunks_file provided. Running with empty context.")
+        logger.warning("No --chunks_file provided. Running with empty context.")
         chunks = []
 
     if args.show_context:

@@ -6,14 +6,14 @@ into one Fund each. Every module that needs ISINs, names, issuers or Yahoo
 tickers (agent tools, ask.py, live_data.py) reads them from here, so adding
 an ETF only means adding its documents to metadata.json.
 
-    from registry import FUNDS, get_fund, resolve_isins
+    from fundscope.registry import FUNDS, get_fund, resolve_isins
 
     FUNDS["IE00B4L5Y983"].name           # "iShares Core MSCI World UCITS ETF"
     get_fund("ie00b4l5y983").yahoo_ticker  # "EUNL.DE"
     resolve_isins(issuer="ubs")          # ["IE00BD4TXV59"]
 
 Usage (CLI — print the registry):
-    python src/registry.py
+    python -m fundscope.registry
 """
 
 import json
@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from config import METADATA_PATH
+from fundscope.config import METADATA_PATH
 
 
 @dataclass
@@ -131,6 +131,10 @@ def resolve_isins(isins: Optional[list[str]] = None,
     return selected
 
 
-if __name__ == "__main__":
+def main():
     for f in FUNDS.values():
         print(f"{f.describe()} | yahoo: {f.yahoo_ticker or '-'}")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,6 @@
 """
-setup.py — One-command setup for FundScope
-Runs all steps required before ask.py can be used:
+bootstrap.py — One-command setup for FundScope (console script: fundscope-setup)
+Runs all steps required before the agent can be used:
   1. Checks prerequisites (dependencies, PDFs, LLM provider key + a tiny ping)
   2. Ingests PDFs from data/raw/ using metadata.json
   3. Embeds chunks and builds the ChromaDB index
@@ -10,35 +10,31 @@ missing or the ping fails, the index is still built and FundScope works in
 retrieval-only mode.
 
 Usage:
-    python setup.py
+    fundscope-setup                     (= python -m fundscope.bootstrap)
 
     # Force a full rebuild of the index (e.g. after adding new documents)
-    python setup.py --rebuild
+    fundscope-setup --rebuild
 
     # Skip ingestion if data/processed/ already has files
-    python setup.py --skip_ingest
+    fundscope-setup --skip_ingest
 
     # Skip the LLM check (no API call at all)
-    python setup.py --skip_llm_check
+    fundscope-setup --skip_llm_check
 """
 
 import sys
 import json
 import argparse
 import subprocess
-from pathlib import Path
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-
-sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
-from config import (  # noqa: E402
+from fundscope.config import (
     PROJECT_ROOT as ROOT,
     DATA_RAW,
     DATA_PROCESSED as DATA_PROC,
     INDEX_PATH,
     METADATA_PATH as METADATA,
-    SRC_DIR as SRC,
 )
+from fundscope.log import setup_logging
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -97,16 +93,16 @@ def check_python_deps() -> bool:
             missing.append(pkg)
 
     if missing:
-        print(f"\n  Install missing packages with:")
-        print(f"    uv sync\n")
+        print("\n  Install missing packages with:")
+        print("    uv sync\n")
         return False
     return True
 
 
 def check_llm() -> bool:
     header("Checking LLM provider")
-    from llm import LLMError, resolve
-    from llm.cli import ping
+    from fundscope.llm import LLMError, resolve
+    from fundscope.llm.cli import ping
 
     try:
         provider, model = resolve("generator")
@@ -162,7 +158,7 @@ def step_ingest() -> bool:
     header("Step 1 — Ingesting PDFs")
     DATA_PROC.mkdir(parents=True, exist_ok=True)
     return run(
-        [sys.executable, str(SRC / "ingest.py"),
+        [sys.executable, "-m", "fundscope.ingest",
          "--batch",      str(DATA_RAW),
          "--config",     str(METADATA),
          "--output_dir", str(DATA_PROC)],
@@ -173,7 +169,7 @@ def step_ingest() -> bool:
 def step_embed(rebuild: bool) -> bool:
     header("Step 2 — Building vector index")
     cmd = [
-        sys.executable, str(SRC / "embed.py"),
+        sys.executable, "-m", "fundscope.embed",
         "--input_dir", str(DATA_PROC),
         "--db_path",   str(INDEX_PATH),
     ]
@@ -186,7 +182,7 @@ def step_embed(rebuild: bool) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        description="FundScope setup — run this once before using ask.py"
+        description="FundScope setup — run this once before asking questions"
     )
     p.add_argument("--rebuild",      action="store_true",
                    help="Wipe and rebuild the vector index from scratch")
@@ -199,6 +195,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main():
     args = build_parser().parse_args()
+    setup_logging()
 
     print("\n" + "═" * 56)
     print("  FundScope — Setup")
@@ -206,10 +203,10 @@ def main():
 
     # ── Prerequisites ──────────────────────────────────────────────────────────
     if not check_python_deps():
-        abort("Fix missing dependencies and re-run setup.py")
+        abort("Fix missing dependencies and re-run fundscope-setup")
 
     if not check_pdfs():
-        abort("Fix missing PDF files and re-run setup.py")
+        abort("Fix missing PDF files and re-run fundscope-setup")
 
     llm_ok = True
     if not args.skip_llm_check:
@@ -245,8 +242,8 @@ def main():
         print("""
   You can now ask questions:
 
-    python src/ask.py                         ← interactive mode
-    python src/ask.py --query "your question" ← single question
+    fundscope                         ← interactive mode
+    fundscope --query "your question" ← single question
 """)
     else:
         print("""
@@ -257,9 +254,9 @@ def main():
 
   To enable answer generation:
     cp .env.example .env        then set ANTHROPIC_API_KEY (or another provider)
-    python src/llm/cli.py --ping
+    python -m fundscope.llm.cli --ping
   Then ask questions with:
-    python src/ask.py
+    fundscope
 """)
 
 

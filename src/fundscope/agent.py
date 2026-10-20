@@ -25,22 +25,23 @@ Interactive commands: funds, chunks, calls, reset, help, exit.
 Requirements:
     A tool-capable LLM configured in .env (default: Claude Haiku 4.5 via the
     Anthropic API — see .env.example). The loop only uses the neutral types
-    in src/llm/, so any provider registered there works.
+    in src/fundscope/llm/, so any provider registered there works.
 
 Usage:
     # Interactive agent mode
-    python src/agent.py
+    fundscope                     (= python -m fundscope.agent)
 
     # Single question
-    python src/agent.py --query "How has the iShares MSCI World performed this year?"
+    python -m fundscope.agent --query "How has the iShares MSCI World performed this year?"
 
     # Show the tool calls the agent made, and the cost of each question
-    python src/agent.py --show_calls --show_cost
+    python -m fundscope.agent --show_calls --show_cost
 
     # Use a different provider / model
-    python src/agent.py --provider groq --model <model-id>
+    python -m fundscope.agent --provider groq --model <model-id>
 """
 
+import logging
 import re
 import json
 import argparse
@@ -49,12 +50,15 @@ from pathlib import Path
 from typing import Optional
 
 # ── Local imports ──────────────────────────────────────────────────────────────
-from config import INDEX_PATH as DB_PATH
-from citations import ChunkBook, chunk_header, resolve_citations
-from llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, Usage, get_llm
-from retrieve import Retriever, RetrievedChunk, apply_min_score
-from live_data import get_etf_live_data, format_for_prompt
-from registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, get_fund,
+from fundscope.config import INDEX_PATH as DB_PATH
+from fundscope.citations import ChunkBook, chunk_header, resolve_citations
+from fundscope.llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, Usage, get_llm
+from fundscope.retrieve import Retriever, RetrievedChunk, apply_min_score
+from fundscope.live_data import get_etf_live_data, format_for_prompt
+from fundscope.log import add_verbose_flag, setup_logging
+
+logger = logging.getLogger(__name__)
+from fundscope.registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, get_fund,
                       resolve_isins)
 
 
@@ -431,7 +435,7 @@ class Agent:
         self._show_calls = show_calls
         self._history_turns = history_turns
         self._history: list[tuple[str, str]] = []     # (question, resolved answer)
-        print(f"[agent] Provider: {self._llm.provider}  |  Model: {self._llm.model}")
+        logger.info("Provider: %s  |  Model: %s", self._llm.provider, self._llm.model)
 
     @property
     def provider(self) -> str:
@@ -527,7 +531,7 @@ class Agent:
         book     = self._executor.book
         resolved = resolve_citations(strip_preamble(text), book)
         if resolved.unknown_refs:
-            print(f"[agent] [warn] cited unknown chunk(s): {resolved.unknown_refs}")
+            logger.warning("cited unknown chunk(s): %s", resolved.unknown_refs)
 
         result.answer        = resolved.text
         result.raw_answer    = resolved.raw_text
@@ -665,11 +669,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Print the retrieved chunks alongside the answer")
     p.add_argument("--show_cost",   action="store_true",
                    help="Print tokens and estimated cost of each question")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args      = build_parser().parse_args()
+    setup_logging(args.verbose)
     retriever = Retriever(db_path=args.db_path)
     agent     = Agent(retriever=retriever, provider=args.provider, model=args.model,
                       show_calls=args.show_calls)

@@ -9,8 +9,8 @@ Install:
     pip install yfinance
 
 Usage (standalone test):
-    python src/live_data.py --isin IE00B4L5Y983
-    python src/live_data.py --ticker EUNL.DE [--no_cache]
+    python -m fundscope.live_data --isin IE00B4L5Y983
+    python -m fundscope.live_data --ticker EUNL.DE [--no_cache]
 
 Successful answers are cached on disk for config.LIVE_DATA_TTL_S seconds
 (default 1 h) in config.LIVE_DATA_CACHE_DIR; errors are never cached.
@@ -24,16 +24,11 @@ from datetime import timedelta
 from typing import Optional
 
 
-try:
-    import yfinance as yf
-except ImportError:
-    raise ImportError(
-        "pip install yfinance\n"
-        "yfinance is required for live market data."
-    )
+import yfinance as yf
 
-from config import LIVE_DATA_CACHE_DIR, LIVE_DATA_TTL_S
-from registry import get_fund
+from fundscope.config import LIVE_DATA_CACHE_DIR, LIVE_DATA_TTL_S
+from fundscope.log import add_verbose_flag, setup_logging
+from fundscope.registry import get_fund
 
 
 # ── Disk cache ─────────────────────────────────────────────────────────────────
@@ -256,11 +251,13 @@ def _build_parser() -> argparse.ArgumentParser:
                    help="Months of price history to fetch (default and minimum: 12)")
     p.add_argument("--no_cache", action="store_true",
                    help="Bypass the on-disk cache (neither read nor written)")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args   = _build_parser().parse_args()
+    setup_logging(args.verbose)
     target = args.isin or args.ticker
     data   = get_etf_live_data(target, period_months=args.months, use_cache=not args.no_cache)
     print(format_for_prompt(data))

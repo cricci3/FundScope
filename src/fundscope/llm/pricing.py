@@ -6,6 +6,10 @@ None (and one warning), never an error. Keys are matched as prefixes, so
 "claude-haiku-4-5" also covers the dated id "claude-haiku-4-5-20251001".
 """
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # model prefix: (input, output, cache_read, cache_write_5m)  — $ per 1M tokens
 PRICES = {
     "claude-haiku-4-5":  (1.00,  5.00, 0.10, 1.25),
@@ -28,8 +32,8 @@ def estimate_cost(model: str, usage) -> float | None:
     if price is None:
         if model not in _warned:
             _warned.add(model)
-            print(f"[llm] [warn] No price known for model '{model}' — cost not estimated "
-                  f"(add it to src/llm/pricing.py)")
+            logger.warning("No price known for model '%s' — cost not estimated "
+                           "(add it to src/fundscope/llm/pricing.py)", model)
         return None
     p_in, p_out, p_read, p_write = price
     return (usage.input_tokens * p_in

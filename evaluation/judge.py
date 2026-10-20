@@ -10,7 +10,7 @@ re-validated here). Used by evaluate.py --judge llm.
 import json
 from typing import Optional
 
-from llm import LLMClient, LLMError, Message
+from fundscope.llm import LLMClient, LLMError, Message
 
 VERDICTS    = ["pass", "partial", "fail"]
 CORRECTNESS = ["correct", "partially_correct", "incorrect", "abstained", "not_applicable"]

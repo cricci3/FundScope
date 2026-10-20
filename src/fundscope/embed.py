@@ -17,13 +17,13 @@ Design decisions:
 
 Usage:
     # Index all processed chunks
-    python src/embed.py
+    python -m fundscope.embed
 
     # Force full rebuild (wipes existing collection first)
-    python src/embed.py --rebuild
+    python -m fundscope.embed --rebuild
 
     # Dry run: show what would be indexed without writing
-    python src/embed.py --dry_run
+    python -m fundscope.embed --dry_run
 
 Only JSON files matching an entry in metadata.json (by ingest.build_output_stem)
 are indexed; anything else in the input dir is logged and ignored.
@@ -32,24 +32,20 @@ Install:
     pip install chromadb sentence-transformers
 """
 
+import logging
 import json
 import argparse
 from pathlib import Path
 
-try:
-    import chromadb
-    from chromadb.config import Settings
-except ImportError:
-    raise ImportError("pip install chromadb")
+import chromadb
+from sentence_transformers import SentenceTransformer
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    raise ImportError("pip install sentence-transformers")
+from fundscope.log import add_verbose_flag, setup_logging
+from fundscope.config import (COLLECTION_NAME, EMBEDDING_MODEL, INDEX_PATH, DATA_PROCESSED, METADATA_PATH,
+                              embedding_prefixes)
+from fundscope.ingest import load_config, metadata_from_config_entry, build_output_stem, compute_content_hash
 
-from config import (COLLECTION_NAME, EMBEDDING_MODEL, INDEX_PATH, DATA_PROCESSED, METADATA_PATH,
-                    embedding_prefixes)
-from ingest import load_config, metadata_from_config_entry, build_output_stem, compute_content_hash
+logger = logging.getLogger(__name__)
 
 
 # ── Constants ──────────────────────────────────────────────────────────────────
@@ -137,9 +133,9 @@ def load_chunks(input_dir: Path, config_path: Path = METADATA_PATH) -> list[dict
 
     for path in all_files:
         if path.stem not in stems:
-            print(f"  [skip] {path.name} — not registered in {config_path.name}")
+            logger.info("[skip] %s — not registered in %s", path.name, config_path.name)
     for stem in sorted(stems - {p.stem for p in json_files}):
-        print(f"  [warn] {stem}.json missing — run ingest.py for this document")
+        logger.warning("%s.json missing — run python -m fundscope.ingest for this document", stem)
 
     if not json_files:
         raise FileNotFoundError(f"No registered .json files found in {input_dir}")
@@ -148,7 +144,7 @@ def load_chunks(input_dir: Path, config_path: Path = METADATA_PATH) -> list[dict
     for path in json_files:
         chunks = json.loads(path.read_text(encoding="utf-8-sig", errors="replace"))
         if not isinstance(chunks, list):
-            print(f"  [skip] {path.name} — expected a JSON array")
+            logger.warning("[skip] %s — expected a JSON array", path.name)
             continue
         all_chunks.extend(chunks)
         print(f"  Loaded {len(chunks):>4} chunks  ←  {path.name}")
@@ -191,7 +187,7 @@ def get_collection(
     if indexed_with != model_name:
         raise SystemExit(
             f"  The index was built with embedding model {indexed_with!r}, not {model_name!r}.\n"
-            f"  Rebuild it: python src/embed.py --rebuild --model {model_name}"
+            f"  Rebuild it: python -m fundscope.embed --rebuild --model {model_name}"
         )
     return collection
 
@@ -373,16 +369,18 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Delete and recreate the collection from scratch")
     p.add_argument("--dry_run",    action="store_true",
                    help="Load and count chunks without writing to ChromaDB")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    setup_logging(args.verbose)
 
-    print(f"\n[embed] Input  : {args.input_dir}")
-    print(f"[embed] DB     : {args.db_path}")
-    print(f"[embed] Model  : {args.model}")
-    print(f"[embed] Rebuild: {args.rebuild}")
+    logger.info("Input  : %s", args.input_dir)
+    logger.info("DB     : %s", args.db_path)
+    logger.info("Model  : %s", args.model)
+    logger.info("Rebuild: %s", args.rebuild)
 
     chunks     = load_chunks(args.input_dir, args.config)
     collection = get_collection(args.db_path, rebuild=args.rebuild, model_name=args.model)

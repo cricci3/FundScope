@@ -12,7 +12,7 @@ import json
 
 import openai
 
-from llm.base import LLMClient, LLMError, LLMResponse, ToolCall, Usage
+from fundscope.llm.base import LLMClient, LLMError, LLMResponse, ToolCall, Usage
 
 OPENAI_COMPAT_PROVIDERS = {
     "groq":       "https://api.groq.com/openai/v1",

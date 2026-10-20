@@ -9,12 +9,12 @@ from pathlib import Path
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 
-PROJECT_ROOT   = Path(__file__).resolve().parent.parent
-SRC_DIR        = PROJECT_ROOT / "src"
+PACKAGE_DIR    = Path(__file__).resolve().parent            # src/fundscope/
+PROJECT_ROOT   = PACKAGE_DIR.parent.parent
 DATA_RAW       = PROJECT_ROOT / "data" / "raw"
 DATA_PROCESSED = PROJECT_ROOT / "data" / "processed"
 INDEX_PATH     = PROJECT_ROOT / "index" / "chroma_db"
-METADATA_PATH  = SRC_DIR / "metadata.json"
+METADATA_PATH  = PACKAGE_DIR / "metadata.json"
 EVAL_DIR       = PROJECT_ROOT / "evaluation"
 LIVE_DATA_CACHE_DIR = PROJECT_ROOT / "data" / "cache" / "live_data"
 

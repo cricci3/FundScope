@@ -12,18 +12,16 @@ Usage:
         --pipeline_output evaluation/runs/<timestamp>_retrieval-only.json --retrieval_only
 """
 
-import sys
 import json
 import argparse
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-from config import INDEX_PATH, EVAL_DIR  # noqa: E402
-from retrieve import Retriever  # noqa: E402
-from pipeline import (  # noqa: E402
+from fundscope.config import INDEX_PATH, EVAL_DIR
+from fundscope.log import add_verbose_flag, setup_logging
+from fundscope.retrieve import Retriever
+from fundscope.pipeline import (
     K_DEFAULT, PipelineResult, _extract_isin_list, chunk_to_dict,
     retrieve_chunks, select_questions,
 )
@@ -65,7 +63,9 @@ def main():
     p.add_argument("--k",            type=int, default=K_DEFAULT)
     p.add_argument("--qids",         nargs="+", default=None)
     p.add_argument("--limit",        type=int, default=None)
+    add_verbose_flag(p)
     args = p.parse_args()
+    setup_logging(args.verbose)
 
     started = datetime.now(timezone.utc)
     output  = args.output or EVAL_DIR / "runs" / \

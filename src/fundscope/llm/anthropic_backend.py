@@ -19,7 +19,7 @@ no extra cost — so this only pays off once the prompt grows.
 
 import anthropic
 
-from llm.base import LLMClient, LLMError, LLMResponse, ToolCall, Usage
+from fundscope.llm.base import LLMClient, LLMError, LLMResponse, ToolCall, Usage
 
 MAX_RETRIES = 5
 

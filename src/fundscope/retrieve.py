@@ -27,7 +27,7 @@ threshold (config.MIN_SIMILARITY) — the agent uses it and tells the model.
 The index records its embedding model; querying it with another model fails.
 
 Usage (Python API — called from pipeline.py):
-    from retrieve import Retriever
+    from fundscope.retrieve import Retriever
 
     retriever = Retriever()   # defaults to config.INDEX_PATH
 
@@ -55,17 +55,15 @@ Usage (Python API — called from pipeline.py):
     )
 
 Usage (CLI — useful for manual inspection during development):
-    python src/retrieve.py --query "What is the TER of IE00B4L5Y983?" \
+    python -m fundscope.retrieve --query "What is the TER of IE00B4L5Y983?" \
                        --etf_isin IE00B4L5Y983 --doc_type factsheet
 
-    python src/retrieve.py --query "Compare ongoing charges" \
+    python -m fundscope.retrieve --query "Compare ongoing charges" \
                        --isin_list IE00B4L5Y983 IE00BD4TXV59 \
                        --doc_type factsheet --mode comparative
-
-Install:
-    pip install chromadb sentence-transformers
 """
 
+import logging
 import re
 import json
 import argparse
@@ -73,26 +71,16 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Optional, Union
 
+import chromadb
 import numpy as np
+from rank_bm25 import BM25Okapi
+from sentence_transformers import SentenceTransformer
 
-try:
-    import chromadb
-except ImportError:
-    raise ImportError("pip install chromadb")
+from fundscope.config import (COLLECTION_NAME, EMBEDDING_MODEL, HYBRID_SEARCH, INDEX_PATH,
+                              embedding_prefixes, min_similarity)
+from fundscope.log import add_verbose_flag, setup_logging
 
-try:
-    from rank_bm25 import BM25Okapi
-except ImportError:
-    raise ImportError("uv add rank_bm25")
-
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    raise ImportError("pip install sentence-transformers")
-
-
-from config import (COLLECTION_NAME, EMBEDDING_MODEL, HYBRID_SEARCH, INDEX_PATH,
-                    embedding_prefixes, min_similarity)
+logger = logging.getLogger(__name__)
 
 
 # ── Result type ────────────────────────────────────────────────────────────────
@@ -269,20 +257,20 @@ class Retriever:
         self._model_name = model_name
         self.hybrid      = hybrid
 
-        print(f"[retrieve] Loading ChromaDB from {self._db_path}")
+        logger.info("Loading ChromaDB from %s", self._db_path)
         self._client = chromadb.PersistentClient(path=str(self._db_path))
 
         try:
             self._collection = self._client.get_collection(collection_name)
-        except Exception:
+        except Exception as e:
             raise RuntimeError(
                 f"\n  Collection '{collection_name}' not found in ChromaDB.\n"
                 f"  The index has not been built yet.\n\n"
                 f"  Run setup first:\n"
-                f"      python setup.py\n\n"
+                f"      fundscope-setup\n\n"
                 f"  Or rebuild manually:\n"
-                f"      python src/embed.py --rebuild\n"
-            )
+                f"      python -m fundscope.embed --rebuild\n"
+            ) from e
 
         count = self._collection.count()
         if count == 0:
@@ -290,10 +278,10 @@ class Retriever:
                 f"\n  Collection '{collection_name}' exists but contains no chunks.\n"
                 f"  Ingestion may have failed or produced no output.\n\n"
                 f"  Check that data/processed/ contains .json files, then run:\n"
-                f"      python setup.py --rebuild\n"
+                f"      fundscope-setup --rebuild\n"
             )
 
-        print(f"[retrieve] Collection '{collection_name}' — {count} chunks")
+        logger.info("Collection '%s' — %d chunks", collection_name, count)
 
         # Query and passage vectors must come from the same model
         indexed_with = (self._collection.metadata or {}).get("embedding_model")
@@ -302,10 +290,10 @@ class Retriever:
                 f"\n  The index was built with embedding model {indexed_with!r}, "
                 f"but queries would use {model_name!r}.\n"
                 f"  Rebuild the index with the configured model:\n"
-                f"      python setup.py --rebuild\n"
+                f"      fundscope-setup --rebuild\n"
             )
 
-        print(f"[retrieve] Loading model: {model_name}")
+        logger.info("Loading model: %s", model_name)
         self._model = SentenceTransformer(model_name)
         self._query_prefix = embedding_prefixes(model_name)[0]
         # Callers (the agent) drop chunks below this similarity: see apply_min_score
@@ -320,7 +308,7 @@ class Retriever:
             self._metas = corpus["metadatas"]
             self._vecs  = np.asarray(corpus["embeddings"], dtype=np.float32)
             self._bm25  = BM25Okapi([tokenize(d) for d in self._docs])
-            print(f"[retrieve] Hybrid search: BM25 + vectors (RRF)")
+            logger.info("Hybrid search: BM25 + vectors (RRF)")
 
     def _embed_query(self, query: str) -> list[float]:
         vec = self._model.encode(
@@ -406,7 +394,7 @@ class Retriever:
             try:
                 all_chunks.extend(self._query(query, q_vec, etf_filter, k_per_etf))
             except Exception as e:
-                print(f"  [warn] No results for {isin}: {e}")
+                logger.warning("No results for %s: %s", isin, e)
 
         return _sort_by_score(_deduplicate(all_chunks))
 
@@ -434,7 +422,7 @@ class Retriever:
             try:
                 all_chunks.extend(self._query(query, q_vec, dt_filter, k_per_doc_type))
             except Exception as e:
-                print(f"  [warn] No results for {etf_isin}/{dt}: {e}")
+                logger.warning("No results for %s/%s: %s", etf_isin, dt, e)
 
         return _sort_by_score(_deduplicate(all_chunks))
 
@@ -560,11 +548,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json",       action="store_true", help="Output results as JSON")
     p.add_argument("--vector_only", action="store_true",
                    help="Embeddings only, no BM25 fusion (default: config.HYBRID_SEARCH)")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    setup_logging(args.verbose)
 
     retriever = Retriever(db_path=args.db_path, hybrid=HYBRID_SEARCH and not args.vector_only)
 

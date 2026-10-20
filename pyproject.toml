@@ -1,6 +1,9 @@
 [project]
 name = "fundscope"
 version = "0.1.0"
+description = "RAG assistant over ETF factsheets and KIDs, with a tool-calling LLM agent"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
     "anthropic>=1.11.0",
@@ -14,8 +17,33 @@ dependencies = [
     "yfinance>=1.7.0",
 ]
 
+[project.scripts]
+fundscope          = "fundscope.agent:main"
+fundscope-setup    = "fundscope.bootstrap:main"
+fundscope-pipeline = "fundscope.pipeline:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fundscope"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.1",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["evaluation"]   # evaluate.py / judge.py are scripts, not package modules
+
+[tool.ruff]
+line-length = 120
+src = ["src", "evaluation", "tests"]
+
+[tool.ruff.lint]
+# pyflakes + import/syntax errors; the code base aligns assignments with spaces
+# and puts short ifs on one line, so the pycodestyle style rules stay off.
+select = ["F", "E9", "E711", "E712", "E713", "E714", "B006", "B904"]

@@ -6,8 +6,8 @@ tokens, so the model can read all of it. This engine answers from the complete
 documents, to measure what retrieval adds (or loses) compared with giving the
 model everything (task 5.5):
 
-    python src/pipeline.py --run_eval --engine full
-    python src/fullcontext.py --query "What is the TER of IE00B4L5Y983?" --show_cost
+    python -m fundscope.pipeline --run_eval --engine full
+    python -m fundscope.fullcontext --query "What is the TER of IE00B4L5Y983?" --show_cost
 
 The documents go in the system prompt, which the Anthropic backend marks for
 prompt caching: the first question writes the cache (1.25× input price), the
@@ -16,20 +16,21 @@ numbered source ([Chunk N], see citations.py), so citations resolve to
 [ISIN | issuer | doc_type | year] like those of the other engines.
 """
 
+import logging
 import argparse
 
-try:
-    import pdfplumber
-except ImportError:
-    raise ImportError("pdfplumber is required: pip install pdfplumber")
+import pdfplumber
 
-from agent import AgentResult, strip_preamble
-from citations import ChunkBook, chunk_header, resolve_citations
-from config import DATA_RAW, METADATA_PATH
-from ingest import clean_text, load_config, metadata_from_config_entry
-from llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
-from registry import FUNDS
-from retrieve import RetrievedChunk
+from fundscope.agent import AgentResult, strip_preamble
+from fundscope.citations import ChunkBook, chunk_header, resolve_citations
+from fundscope.config import DATA_RAW, METADATA_PATH
+from fundscope.ingest import clean_text, load_config, metadata_from_config_entry
+from fundscope.llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
+from fundscope.log import add_verbose_flag, setup_logging
+
+logger = logging.getLogger(__name__)
+from fundscope.registry import FUNDS
+from fundscope.retrieve import RetrievedChunk
 
 MAX_TOKENS = 1024
 
@@ -131,7 +132,9 @@ def main():
     p.add_argument("--provider", default=None, choices=PROVIDERS)
     p.add_argument("--model", default=None)
     p.add_argument("--show_cost", action="store_true")
+    add_verbose_flag(p)
     args = p.parse_args()
+    setup_logging(args.verbose)
 
     result = FullContextAnswerer(args.provider, args.model).run(args.query)
     print(f"\n  {result.answer}\n")

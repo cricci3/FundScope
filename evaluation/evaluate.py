@@ -59,7 +59,6 @@ too), one result per question:
 """
 
 import re
-import sys
 import json
 import argparse
 from datetime import datetime, timezone
@@ -67,9 +66,8 @@ from pathlib import Path
 from dataclasses import dataclass, asdict, field
 from typing import Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-import config  # noqa: E402
+from fundscope import config
+from fundscope.log import add_verbose_flag, setup_logging
 
 
 # ── Result data structures ─────────────────────────────────────────────────────
@@ -582,7 +580,7 @@ def run_evaluation(
 
     if judge_llm is not None:
         from judge import judge_question
-        from llm import BudgetExceededError, LLMError
+        from fundscope.llm import BudgetExceededError, LLMError
 
     for qid, question in questions.items():
         if qid not in pipeline_out:
@@ -751,17 +749,19 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Only evaluate the first N (selected) questions")
     p.add_argument("--compare",         type=Path, default=None,
                    help="Earlier report (e.g. evaluation/baseline_cloud.json) to print deltas against")
+    add_verbose_flag(p)
     return p
 
 
 def main():
     args = build_parser().parse_args()
+    setup_logging(args.verbose)
 
     judge_llm = None
     if args.judge == "llm":
         if args.retrieval_only:
             raise SystemExit("--judge llm needs generated answers (not --retrieval_only)")
-        from llm import get_llm
+        from fundscope.llm import get_llm
         judge_llm = get_llm("judge", args.judge_provider, args.judge_model)
         print(f"[judge] {judge_llm.provider} / {judge_llm.model}  effort={config.JUDGE_EFFORT}")
 
@@ -780,7 +780,7 @@ def main():
 
     judge_cost = None
     if judge_llm is not None:
-        from llm import SESSION
+        from fundscope.llm import SESSION
         judge_cost = round(SESSION.cost_usd, 6)
         print(f"  Judge: {SESSION.summary()}  [{judge_status}]")
         run_cost = (run.get("totals") or {}).get("cost_usd") or 0.0

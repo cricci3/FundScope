@@ -1,7 +1,7 @@
 """
 base.py — Provider-neutral types and the LLMClient interface
 
-Everything outside src/llm/ talks to the model only through these types,
+Everything outside src/fundscope/llm/ talks to the model only through these types,
 so it never needs to know which provider (Anthropic, Groq, ...) is underneath.
 """
 
@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from llm.pricing import estimate_cost
+from fundscope.llm.pricing import estimate_cost
 
 
 # ── Neutral types ──────────────────────────────────────────────────────────────

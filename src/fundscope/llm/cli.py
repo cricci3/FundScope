@@ -2,18 +2,16 @@
 cli.py — Check the configured LLM provider
 
 Usage:
-    python src/llm/cli.py --ping
-    python src/llm/cli.py --ping --provider groq --model llama-3.3-70b-versatile
-    python src/llm/cli.py --ping --role judge
+    python -m fundscope.llm.cli --ping
+    python -m fundscope.llm.cli --ping --provider groq --model llama-3.3-70b-versatile
+    python -m fundscope.llm.cli --ping --role judge
 """
 
 import sys
 import argparse
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # src/
-
-from llm import PROVIDERS, SESSION, LLMError, Message, get_llm  # noqa: E402
+from fundscope.llm import PROVIDERS, SESSION, LLMError, Message, get_llm
+from fundscope.log import add_verbose_flag, setup_logging
 
 
 def ping(role: str = "generator", provider: str | None = None, model: str | None = None) -> bool:
@@ -36,7 +34,9 @@ def main():
     p.add_argument("--role", default="generator", choices=["generator", "judge"])
     p.add_argument("--provider", default=None, choices=PROVIDERS)
     p.add_argument("--model", default=None)
+    add_verbose_flag(p)
     args = p.parse_args()
+    setup_logging(args.verbose)
     if not args.ping:
         p.print_help()
         return
