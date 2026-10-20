@@ -47,6 +47,11 @@ def main():
 
     sys.argv = ["streamlit", "run", str(APP),
                 "--server.headless", "true" if args.no_browser else "false",
+                # Streamlit's first-run "Welcome… Email:" prompt waits for input in the
+                # terminal before starting the server; nothing is sent anywhere without it
+                "--server.showEmailPrompt", "false",
+                "--server.address", "localhost",     # this machine only, not the local network
+
                 "--browser.gatherUsageStats", "false",
                 "--client.toolbarMode", "minimal",
                 # the file watcher walks every imported module: with transformers loaded
