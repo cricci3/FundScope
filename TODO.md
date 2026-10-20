@@ -42,18 +42,18 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ## Stato attuale (aggiornato 2026-10-20)
 
-- **Branch:** solo `main`, pushato su `origin/main` a fine fase 5. `refactor/cloud-llm` eliminato (0.3, 07/10/2026): fase 0 completa.
-- **Test/lint:** fase 8 completa (20/10/2026, su richiesta dell'utente prima delle fasi 6–7): pacchetto `src/fundscope/`, 55 test pytest senza rete, ruff, CI GitHub Actions. `uv run ruff check .` e `uv run pytest -q` vanno lanciati a fine fase.
-- **Fatto nell'ultima sessione:** fase 5 completa (esito e tabella sotto la fase 5): chunk 1000/1200, key facts corretti, multilingual-e5-base, ricerca ibrida BM25+RRF, soglia di similarità, key facts in testa ai risultati dell'agent, engine `full`. Credito Anthropic speso finora ≈ 2,33 $ (fase 5: 1,17 $).
+- **Branch:** solo `main`, tutto committato e pushato (ultimo commit `0127564`); CI GitHub Actions verde su fase 8 e fase 9.
+- **Test/lint:** 61 passed (`uv run pytest -q`, ~2 min, nessuna rete) · `uv run ruff check .` ok.
+- **Fatto nell'ultima sessione:** fase 8 (pacchetto `src/fundscope/`, logging, test, CI, README) e fase 9 tranne il deploy: UI Streamlit in locale, `uv run fundscope` apre il browser; la chat da terminale ora è `fundscope-cli`. Le fasi 6–7 sono state saltate su richiesta dell'utente. Credito Anthropic speso finora ≈ 2,36 $ (sessione: ≈ 0,03 $ di prove della UI con l'API reale; da verificare nella console).
 - **Problemi aperti / scoperti:**
-  - Groundedness dell'agent 70.6% sulle 17 inglesi: Haiku aggiunge spiegazioni non presenti nei documenti ("full replication means…", "to reduce costs"), nonostante la regola nel system prompt. Candidato: regola più esplicita ("non spiegare i termini") o un passaggio di verifica.
-  - T2_001: l'agent sceglie lo 0,1% del KID invece del TER 0,06% del factsheet (entrambi nel contesto); la ground truth chiede il factsheet.
-  - Full context (pass 76.5%) batte l'agent (64.7%) su questo corpus piccolo e costa meno: da riconsiderare dopo l'ampliamento del corpus (fase 7).
-  - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (task 6.1); `EUNL.DE` funziona con dati reali.
-  - L'avvio è lento (~40 s: import + modello e5-base da 1,1 GB); con `HF_HUB_OFFLINE=1` si evitano i controlli di rete su Hugging Face.
-  - Judge non deterministico (±1 domanda tra run).
-- **Decisioni recenti:** embedding `intfloat/multilingual-e5-base` (l'indice registra il modello; cambiarlo richiede `setup.py --rebuild`); ground truth a 22 domande (le 5 italiane in coda); `baseline_cloud.json` resta la baseline ufficiale (promozione di un report di fase 4/5 non decisa).
-- **Prossimo passo:** fase 9 fatta (UI locale, `uv run fundscope`; deploy 9.2 rinviato). Restano aperti 6.1 (ticker UBS: nella tab Live data compare l'errore di Yahoo) e la fase 7 (corpus).
+  - Da verificare con l'utente: dopo il fix `0127564` (prompt email di Streamlit disattivato, server solo su localhost) `uv run fundscope` deve aprire il browser da solo. L'utente aveva segnalato il prompt email e la pagina che non si apriva; il fix è stato provato solo con stdin chiuso (server su e raggiungibile), non guardando lo schermo dell'utente.
+  - L'utente non vuole componenti che chiedono login/email: se Streamlit dà ancora fastidio, alternativa proposta Gradio.
+  - Ticker UBS `0P0001FMRI.L` → 404 su Yahoo (task 6.1): nella tab Live data della UI compare l'errore.
+  - Groundedness dell'agent ~73%: Haiku aggiunge spiegazioni assenti dai documenti. T2_001: sceglie lo 0,1% del KID invece del TER 0,06% del factsheet.
+  - Full context (pass 81.8%) batte l'agent (68.2%) su questo corpus piccolo: da riconsiderare dopo la fase 7. Judge non deterministico (±1 domanda).
+  - Una prova CLI ha ricevuto "invalid API key" (401) e pochi minuti dopo la stessa chiave funzionava dalla UI: causa non chiarita, da verificare se si ripete.
+- **Decisioni recenti:** PDF del corpus non versionati (la CI salta la valutazione retrieval); UI solo su localhost, deploy 9.2 rinviato; tema chiaro unico (colori di grafici e diagramma scelti per lo sfondo chiaro); disclaimer aggiunto dalla UI e non dal prompt, così le risposte valutate non cambiano.
+- **Prossimo passo:** 1) far lanciare all'utente `uv run fundscope` e confermare che il browser si apre senza prompt; 2) task 6.1 (ticker Yahoo UBS corretto in `src/fundscope/metadata.json`); 3) fase 7 (nuovi ETF e documenti multi-anno), poi valutazione completa con judge.
 
 ---
 
