@@ -56,10 +56,10 @@ from fundscope.llm import PROVIDERS, SESSION, LLMClient, Message, ToolSpec, Usag
 from fundscope.retrieve import Retriever, RetrievedChunk, apply_min_score
 from fundscope.live_data import get_etf_live_data, format_for_prompt
 from fundscope.log import add_verbose_flag, setup_logging
+from fundscope.registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, get_fund,
+                                resolve_isins)
 
 logger = logging.getLogger(__name__)
-from fundscope.registry import (FUNDS, all_doc_types, all_isins, all_issuers, all_years, get_fund,
-                      resolve_isins)
 
 
 # ── Config ─────────────────────────────────────────────────────────────────────

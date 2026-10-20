@@ -27,10 +27,10 @@ from fundscope.config import DATA_RAW, METADATA_PATH
 from fundscope.ingest import clean_text, load_config, metadata_from_config_entry
 from fundscope.llm import PROVIDERS, SESSION, LLMClient, Message, get_llm
 from fundscope.log import add_verbose_flag, setup_logging
-
-logger = logging.getLogger(__name__)
 from fundscope.registry import FUNDS
 from fundscope.retrieve import RetrievedChunk
+
+logger = logging.getLogger(__name__)
 
 MAX_TOKENS = 1024
 
