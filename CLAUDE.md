@@ -6,11 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `TODO.md` (Italian) is the project roadmap: phases 0–9, each task with the files involved and a **"Done quando"** (done when) criterion. Work rules:
 
-- **One phase at a time, in order.** Phases 0–5 are done. Phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `src/llm/` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline; phase 4 made the tool-calling agent the only entrypoint; phase 5 reworked retrieval (bigger chunks, multilingual embeddings, hybrid BM25 search, key facts) and added the full-context engine. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
+- **One phase at a time, in order.** Phases 0–5 and 8 are done (the user skipped ahead to phase 8 on 2026-10-20: phase 6 still has task 6.1 open, phase 7 is not started; next is phase 9, the UI). Phase 2 moved generation to Claude via the Anthropic API behind the provider-neutral `fundscope.llm` interface — Ollama has been uninstalled and must not be reintroduced; phase 3 fixed the evaluation, added the LLM judge and set the official baseline; phase 4 made the tool-calling agent the only entrypoint; phase 5 reworked retrieval (bigger chunks, multilingual embeddings, hybrid BM25 search, key facts) and added the full-context engine. Don't start phase N+1 until every task in phase N meets its "Done quando" criterion.
 - Tick tasks `[x]` in `TODO.md` as they are completed.
-- **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`python setup.py --rebuild`), then run the pipeline + evaluation with the judge (`--judge llm --compare evaluation/baseline_cloud.json`) and report the metric deltas against the baseline before moving on.
+- **At the end of each phase, launch the execution** to verify it end-to-end: rebuild the index if data/ingest/embed changed (`uv run fundscope-setup --rebuild`), run `uv run ruff check .` and `uv run pytest -q`, then run the pipeline + evaluation with the judge (`--judge llm --compare evaluation/baseline_cloud.json`) and report the metric deltas against the baseline before moving on.
 - **Work only on `main` — never create branches.** Commit after each completed task, with a message that starts with the task number (e.g. `2.3: OpenAI-compatible backend`); push to `origin/main` at the end of each phase.
-- **The LLM provider is Claude via the Anthropic API, with limited prepaid credit (~5 $).** Never hard-code a provider or model outside `src/llm/` and `config.py`. During development run the pipeline/evaluation on subsets (`--limit`, `--qids`); run the full 22-question evaluation only at the end of a phase, and always report the cost of each run.
+- **The LLM provider is Claude via the Anthropic API, with limited prepaid credit (~5 $).** Never hard-code a provider or model outside `src/fundscope/llm/` and `config.py`. During development run the pipeline/evaluation on subsets (`--limit`, `--qids`); run the full 22-question evaluation only at the end of a phase, and always report the cost of each run.
 
 Current reference: **`evaluation/baseline_cloud.json`** (task 3.7; Haiku 4.5 generator, Sonnet 5.5 judge, 17 questions): judge verdict pass 0.353 · judge correctness 0.467 · grounded 0.824 · abstained 0.353 · attribution 0.882 · retrieval precision 0.988 / recall 1.000 (document-level). Cost of a full run + judge ≈ 0.12 $. Most failures are abstentions: the right document is retrieved but not the chunk holding the value. `evaluation/baseline_llama3.2-3b.json` is historical only and not comparable.
 
@@ -18,51 +18,56 @@ Latest result (phase 5, agent engine — `evaluation/report_phase5_agent.json`, 
 
 ## Commands
 
-No test suite, linter or packaging yet (planned in phase 8). Scripts in `src/` import each other as top-level modules (`from retrieve import Retriever`), so run them as `python src/<script>.py` — never as `python -m`.
+`src/fundscope/` is an installable package (src layout, hatchling): `uv sync` installs it in editable mode, with the dev group (pytest, ruff). Modules import each other as `from fundscope.retrieve import Retriever`; run them as console scripts or `python -m fundscope.<module>` — never as `python src/...` (there is no `sys.path` hack any more). `evaluation/*.py` are plain scripts that import the installed package. torch comes from the CPU index on Linux (`[tool.uv.sources]`), from PyPI on Windows.
 
-Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13): `uv sync` creates `.venv`; prefix the commands below with `uv run` (e.g. `uv run python setup.py`). Add deps with `uv add <pkg>`. `requirements.txt` is legacy (cleanup in TODO 8.1).
+Environment is managed by **uv** (`pyproject.toml` + `uv.lock`, Python 3.13); prefix the commands below with `uv run`. Add deps with `uv add <pkg>` (dev: `uv add --dev`).
 
 LLM configuration lives in `.env` (template: `.env.example`; `.env` is git-ignored, never commit it): `LLM_PROVIDER` (default `anthropic`), `LLM_MODEL` (empty → `claude-haiku-4-5`), `JUDGE_PROVIDER`/`JUDGE_MODEL` (default `claude-sonnet-5-5`), per-provider keys `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`, plus `LLM_MAX_COST_USD` (per-run budget, default 0.50), `LLM_MIN_INTERVAL_S` and `LIVE_DATA_TTL_S` (Yahoo cache in `data/cache/live_data/`, default 3600, 0 disables). Precedence: `--provider`/`--model` flags > env/.env > defaults in `config.py`.
 
+Every CLI takes `-v/--verbose` (INFO logs to stderr via `fundscope.log.setup_logging`, which also reconfigures stdout/stderr to UTF-8); stdout carries only program output.
+
 ```bash
 uv sync
+uv run ruff check .                 # lint (config in pyproject.toml: pyflakes + a few bug rules)
+uv run pytest -q                    # 55 tests, ~1 min, no network / API key (see tests/conftest.py)
 
-# Full setup: checks deps, PDFs, LLM key + ping; ingests data/raw/ via src/metadata.json, builds the index
-python setup.py [--rebuild] [--skip_ingest] [--skip_llm_check]
+# Full setup: checks deps, PDFs, LLM key + ping; ingests data/raw/ via src/fundscope/metadata.json, builds the index
+fundscope-setup [--rebuild] [--skip_ingest] [--skip_llm_check]        # = python -m fundscope.bootstrap
 
 # LLM provider check (a few tokens; prints model, tokens, cost)
-python src/llm/cli.py --ping [--provider groq --model ...] [--role judge]
+python -m fundscope.llm.cli --ping [--provider groq --model ...] [--role judge]
 
 # Individual stages
-python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
-python src/embed.py --input_dir data/processed/ --db_path index/chroma_db/ [--rebuild] [--dry_run]
-python src/retrieve.py --query "..." --etf_isin IE00B4L5Y983 --doc_type factsheet [--mode comparative --isin_list A B] [--json] [--vector_only]
+python -m fundscope.ingest --batch data/raw/ --config src/fundscope/metadata.json --output_dir data/processed/
+python -m fundscope.embed --input_dir data/processed/ --db_path index/chroma_db/ [--rebuild] [--dry_run]
+python -m fundscope.retrieve --query "..." --etf_isin IE00B4L5Y983 --doc_type factsheet [--mode comparative --isin_list A B] [--json] [--vector_only]
 
 # Entrypoints
-python src/agent.py [--query "..."] [--show_calls] [--show_chunks] [--show_cost] [--provider ...] [--model ...]  # tool-calling agent (the entrypoint)
-python src/ask.py ...                                                # alias of agent.py, same flags
-python src/fullcontext.py --query "..." [--show_cost]                # no retrieval: every document in the cached prompt
-python src/registry.py                                               # print the fund registry
-python src/live_data.py --isin IE00B4L5Y983 [--no_cache]            # yfinance market data (disk cache, TTL LIVE_DATA_TTL_S, default 1 h)
+fundscope [--query "..."] [--show_calls] [--show_chunks] [--show_cost] [--provider ...] [--model ...]  # tool-calling agent (= python -m fundscope[.agent]; fundscope.ask is an alias)
+python -m fundscope.fullcontext --query "..." [--show_cost]          # no retrieval: every document in the cached prompt
+python -m fundscope.registry                                         # print the fund registry
+python -m fundscope.live_data --isin IE00B4L5Y983 [--no_cache]       # yfinance market data (disk cache, TTL LIVE_DATA_TTL_S, default 1 h)
 
 # Evaluation (22 ground-truth questions: 17 English + 5 Italian at the end). Output defaults to evaluation/runs/<UTC ts>_<model>[_agent|_full].json
 # During development use --limit N / --qids ...; run all 22 only at the end of a phase and report the cost.
-python src/pipeline.py --run_eval [--engine agent|rag|full] [--limit 3] [--qids T1_001 T2_003] [--output ...]
-python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/runs/<run>.json --report evaluation/report.json [--judge heuristic|llm] [--compare evaluation/baseline_cloud.json] [--retrieval_only] [--limit N] [--qids ...]
+fundscope-pipeline --run_eval [--engine agent|rag|full] [--limit 3] [--qids T1_001 T2_003] [--output ...]
+python evaluation/evaluate.py --ground_truth evaluation/ground_truth.json --pipeline_output evaluation/runs/<run>.json --report evaluation/report.json [--judge heuristic|llm] [--compare evaluation/baseline_cloud.json] [--retrieval_only] [--min_recall 0.95] [--limit N] [--qids ...]
 python evaluation/run_retrieval.py [--limit N]          # retrieval only, no LLM; score with --retrieval_only
 ```
 
-Single question through the batch pipeline: `python src/pipeline.py --query "..."` (agent); the fixed RAG path takes routing hints: `python src/pipeline.py --engine rag --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
+Single question through the batch pipeline: `fundscope-pipeline --query "..."` (agent); the fixed RAG path takes routing hints: `fundscope-pipeline --engine rag --query "..." --query_type 2 --isin_list IE00B4L5Y983 IE00BD4TXV59`.
+
+**Tests** (`tests/`): `conftest.py` builds a temporary ChromaDB index from `SAMPLE_CHUNKS` with `HashingEmbedder` (monkeypatched over `retrieve.SentenceTransformer`), and resets the `SESSION` cost tracker before each test. LLM tests use a `ScriptedLLM(LLMClient)` or replace the SDK method (`client._client.messages.create`) with a recorder returning `anthropic.types.Message` / `openai...ChatCompletion` objects. `test_ingest.py` generates its own PDF (`make_pdf`) and, when `data/raw/` holds the corpus, checks re-ingestion reproduces `data/processed/` chunk ids. `pytest` puts `evaluation/` on the path (`import evaluate`). **CI** (`.github/workflows/ci.yml`): `uv sync --locked`, ruff, pytest; the retrieval-only gate runs only if `data/raw/*.pdf` exist (the user chose not to version the PDFs).
 
 
 ## Architecture
 
-RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `intfloat/multilingual-e5-base` embeddings → ChromaDB + BM25 (all local) → cloud LLM through `src/llm/` (default Claude Haiku 4.5 via the Anthropic API).
+RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `intfloat/multilingual-e5-base` embeddings → ChromaDB + BM25 (all local) → cloud LLM through `fundscope.llm` (default Claude Haiku 4.5 via the Anthropic API).
 
-- **`src/llm/`** is the only place that imports `anthropic` / `openai`. `chat()` also takes `response_schema` (structured JSON output) and `effort` (ignored where unsupported; Haiku 4.5 rejects it, Sonnet 5.5 rejects `temperature`). `base.py` has the neutral types (`Message`, `ToolSpec`, `ToolCall`, `Usage`, `LLMResponse`), the `LLMClient` interface (one method, `chat(messages, *, system, tools, temperature, max_tokens)`), and the process-wide `SESSION` cost tracker that enforces `LLM_MAX_COST_USD` (raises `BudgetExceededError`). `get_llm(role="generator"|"judge", provider, model)` in `__init__.py` builds the client. Backends: `anthropic_backend.py` (native SDK; SDK 1.x has no `temperature` kwarg, so it goes via `extra_body` for models that accept it; cache breakpoint on the system block — Haiku 4.5 only caches prefixes ≥ 4096 tokens) and `openai_compat.py` (one-line registry `OPENAI_COMPAT_PROVIDERS`, key from `<NAME>_API_KEY`). Prices in `pricing.py` (unknown model → cost `None`).
+- **`src/fundscope/llm/`** is the only place that imports `anthropic` / `openai`. `chat()` also takes `response_schema` (structured JSON output) and `effort` (ignored where unsupported; Haiku 4.5 rejects it, Sonnet 5.5 rejects `temperature`). `base.py` has the neutral types (`Message`, `ToolSpec`, `ToolCall`, `Usage`, `LLMResponse`), the `LLMClient` interface (one method, `chat(messages, *, system, tools, temperature, max_tokens)`), and the process-wide `SESSION` cost tracker that enforces `LLM_MAX_COST_USD` (raises `BudgetExceededError`). `get_llm(role="generator"|"judge", provider, model)` in `__init__.py` builds the client. Backends: `anthropic_backend.py` (native SDK; SDK 1.x has no `temperature` kwarg, so it goes via `extra_body` for models that accept it; cache breakpoint on the system block — Haiku 4.5 only caches prefixes ≥ 4096 tokens) and `openai_compat.py` (one-line registry `OPENAI_COMPAT_PROVIDERS`, key from `<NAME>_API_KEY`). Prices in `pricing.py` (unknown model → cost `None`).
 - In agent loops append `response.to_message()` (not a hand-built message): it carries the provider-native content (`raw`) that the backend replays verbatim.
 
-- **`src/metadata.json`** is the document registry: PDF filename → `isin`, `name`, `issuer`, `category`, `type` (factsheet|kid), `year`, `yahoo_ticker`, … (`name`/`yahoo_ticker` are fund-level, identical on every document of an ISIN). **`src/registry.py`** groups it by ISIN into `FUNDS` (name, issuer, ticker, doc types, years) — the only source of ISINs/names/tickers for the agent tools and `live_data.py`. `ingest.py` attaches the document fields to every chunk; output files in `data/processed/` are named by `build_output_stem` (e.g. `IE00B4L5Y983_2026_kid.json`).
+- **`src/fundscope/metadata.json`** is the document registry: PDF filename → `isin`, `name`, `issuer`, `category`, `type` (factsheet|kid), `year`, `yahoo_ticker`, … (`name`/`yahoo_ticker` are fund-level, identical on every document of an ISIN). **`src/fundscope/registry.py`** groups it by ISIN into `FUNDS` (name, issuer, ticker, doc types, years) — the only source of ISINs/names/tickers for the agent tools and `live_data.py`. `ingest.py` attaches the document fields to every chunk; output files in `data/processed/` are named by `build_output_stem` (e.g. `IE00B4L5Y983_2026_kid.json`).
 - **Chunking** (`ingest.py`): per-doc-type sizes from `config.CHUNK_SIZES` / `CHUNK_OVERLAPS` (factsheet 1000 chars, KID 1200, overlap 15%, chosen by a chunk-value-recall sweep); tables kept whole (one-cell tables dropped); issuer glossary pages skipped (`is_glossary_page`); a synthetic "key facts" chunk per document built from case-sensitive label regexes (`_FACTSHEET_KF_PATTERNS` / `_KID_KF_PATTERNS`: TER, replication, methodology, SRI, KID costs…). Chunk ids come from `make_chunk_id`.
 - **Retrieval** (`retrieve.py`): `Retriever` has three modes — `single` (metadata-filtered search), `comparative` (top-k per ISIN, then merged, so one ETF can't dominate), `cross_document` (top-k per doc_type for one ISIN). `route_query` dispatches between them. Filters are built by `_build_where`. Every mode goes through `_query`: vector top-20 + BM25 top-20 (same filters, applied in Python by `_matches`) fused with weighted RRF (`BM25_WEIGHT` 0.5; `config.HYBRID_SEARCH`); `score` stays the cosine similarity. The embedding model is stored in the collection metadata and `Retriever` refuses a mismatch; e5 needs the `query:`/`passage:` prefixes (`config.EMBEDDING_PREFIXES`). `apply_min_score` drops chunks below `config.MIN_SIMILARITY[model]` (key facts and chunks containing a query token with digits are kept).
 - **Query types** (used by `ground_truth.json`, `generate.py` prompts and `pipeline.py`): 1 factual, 2 comparative/cross-doc, 3 temporal (parked — `_parked_type3`, needs multi-year data), 4 synthetic reasoning.
@@ -73,14 +78,14 @@ RAG over ETF factsheets and KIDs (PDF): `pdfplumber` → chunks JSON → `intflo
 
 ### Paths, ids and dedup
 
-- All paths and the collection/embedding-model names live in `src/config.py` (absolute, cwd-independent). `setup.py` adds `src/` to `sys.path` to import it. Don't hard-code `index/chroma_db` anywhere else.
+- All paths and the collection/embedding-model names live in `src/fundscope/config.py` (absolute, cwd-independent; `PROJECT_ROOT` is two levels above the package). Don't hard-code `index/chroma_db` anywhere else.
 - `embed.py` only indexes JSON files whose stem matches a `metadata.json` entry (`build_output_stem`); others are logged as `[skip]`. It also skips chunks whose `content_hash` is already indexed for the same `etf_isin` + `doc_type`.
 - `chunk_id` = hash of `source_file | block_type | sha256(full text)`, independent of year; the key-facts chunk id ignores its `Year:`/`Reference date:` lines.
 - `pipeline.py --run_eval` writes `{"run": {...}, "results": [...]}` and rewrites the file after every question, so a budget stop or Ctrl+C keeps partial results; `evaluate.py` also accepts the old bare-list format.
-- Scripts print non-ASCII characters (`←`, `✓`); when stdout is piped on Windows set `PYTHONIOENCODING=utf-8` or they crash with `UnicodeEncodeError`.
+- Scripts print non-ASCII characters (`←`, `✓`): CLIs call `setup_logging()`, which switches stdout to UTF-8; ad-hoc code that prints without it still needs `PYTHONIOENCODING=utf-8` when piped on Windows.
 
 ### Known pitfalls
 
 - On this machine Git Bash heredocs corrupt non-ASCII characters (`—`, `→`, `─` are common in this repo): write multi-line patches/scripts with the file Write/Edit tools, not `cat <<EOF`. This also applies to `python - <<'EOF'` patch scripts: search strings with non-ASCII characters or `\\` escapes silently fail to match.
-- Changing `EMBEDDING_MODEL` (or its prefixes) needs `python setup.py --rebuild`: `Retriever` raises on an index built with another model. Startup takes ~40 s (imports + the 1.1 GB e5 model); `HF_HUB_OFFLINE=1` skips the Hugging Face network checks once the model is cached.
+- Changing `EMBEDDING_MODEL` (or its prefixes) needs `fundscope-setup --rebuild`: `Retriever` raises on an index built with another model. Startup takes ~40 s (imports + the 1.1 GB e5 model); `HF_HUB_OFFLINE=1` skips the Hugging Face network checks once the model is cached.
 - Adding an ETF only needs `metadata.json` entries (with `name` and `yahoo_ticker`); `registry.py` raises if documents of the same ISIN disagree on a fund-level field.

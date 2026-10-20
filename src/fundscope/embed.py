@@ -27,7 +27,6 @@ Usage:
 
 Only JSON files matching an entry in metadata.json (by ingest.build_output_stem)
 are indexed; anything else in the input dir is logged and ignored.
-
 """
 
 import logging

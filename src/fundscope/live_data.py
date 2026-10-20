@@ -3,10 +3,7 @@ live_data.py — Live market data tool for FundScope
 Fetches current price, returns, volume, and AUM via yfinance.
 
 This module is designed to be called as a tool by the agent loop in agent.py.
-It is not meant to be called directly from ask.py or generate.py.
-
-Install:
-    pip install yfinance
+It is not meant to be called directly from generate.py.
 
 Usage (standalone test):
     python -m fundscope.live_data --isin IE00B4L5Y983

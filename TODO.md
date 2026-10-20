@@ -40,10 +40,10 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
 
 ---
 
-## Stato attuale (aggiornato 2026-10-06)
+## Stato attuale (aggiornato 2026-10-20)
 
 - **Branch:** solo `main`, pushato su `origin/main` a fine fase 5. `refactor/cloud-llm` eliminato (0.3, 07/10/2026): fase 0 completa.
-- **Test/lint:** nessuna suite né ruff (previsti in fase 8). Le verifiche della fase 5 (sweep di chunk/embedding/ibrido, replay delle ricerche dell'agent, soglia) sono state fatte con script temporanei non salvati; la metrica che usavano (chunk value recall) è ora in `evaluate.py`.
+- **Test/lint:** fase 8 completa (20/10/2026, su richiesta dell'utente prima delle fasi 6–7): pacchetto `src/fundscope/`, 55 test pytest senza rete, ruff, CI GitHub Actions. `uv run ruff check .` e `uv run pytest -q` vanno lanciati a fine fase.
 - **Fatto nell'ultima sessione:** fase 5 completa (esito e tabella sotto la fase 5): chunk 1000/1200, key facts corretti, multilingual-e5-base, ricerca ibrida BM25+RRF, soglia di similarità, key facts in testa ai risultati dell'agent, engine `full`. Credito Anthropic speso finora ≈ 2,33 $ (fase 5: 1,17 $).
 - **Problemi aperti / scoperti:**
   - Groundedness dell'agent 70.6% sulle 17 inglesi: Haiku aggiunge spiegazioni non presenti nei documenti ("full replication means…", "to reduce costs"), nonostante la regola nel system prompt. Candidato: regola più esplicita ("non spiegare i termini") o un passaggio di verifica.
@@ -53,7 +53,7 @@ Convenzioni: ogni task ha i file coinvolti e un criterio **Done quando**. Spunta
   - L'avvio è lento (~40 s: import + modello e5-base da 1,1 GB); con `HF_HUB_OFFLINE=1` si evitano i controlli di rete su Hugging Face.
   - Judge non deterministico (±1 domanda tra run).
 - **Decisioni recenti:** embedding `intfloat/multilingual-e5-base` (l'indice registra il modello; cambiarlo richiede `setup.py --rebuild`); ground truth a 22 domande (le 5 italiane in coda); `baseline_cloud.json` resta la baseline ufficiale (promozione di un report di fase 4/5 non decisa).
-- **Prossimo passo:** fase 6 (dati di mercato, `src/live_data.py`), a partire da 6.1 (ticker UBS).
+- **Prossimo passo:** fase 9 (UI) per scelta dell'utente; restano aperti 6.1 (ticker UBS) e la fase 7 (corpus).
 
 ---
 
@@ -321,19 +321,25 @@ Lettura:
 
 ## Fase 8 — Ingegneria del progetto
 
-- [ ] **8.1 Dipendenze** — eliminare `requirements.txt` (sostituito da `pyproject.toml` + `uv.lock`); `anthropic` aggiunto in 2.2; dev-dependency `pytest` e `ruff` (`uv add --dev`); `rank_bm25` quando serve (5.3).
-- [ ] **8.2 Rinominare `setup.py`** in `bootstrap.py` (o `scripts/setup_index.py`): con un `pyproject.toml` presente, `setup.py` è il nome riservato al packaging setuptools e può essere eseguito per errore da `pip install .`.
-- [ ] **8.3 Packaging `src/`** — trasformare `src/` in pacchetto (`fundscope/` con `__init__.py`), eliminare gli import che dipendono dalla cwd, il `sys.path` hack in `setup.py` e il fallback `RetrievedChunk` duplicato in `generate.py`.
-- [ ] **8.4 Logging** — sostituire i `print("[retrieve] …")` con `logging`, livello via `--verbose`; risolve anche il problema `UnicodeEncodeError` su Windows con stdout in pipe.
-- [ ] **8.5 Test (`tests/`)** con pytest:
+- [x] **8.1 Dipendenze** — eliminare `requirements.txt` (sostituito da `pyproject.toml` + `uv.lock`); `anthropic` aggiunto in 2.2; dev-dependency `pytest` e `ruff` (`uv add --dev`); `rank_bm25` quando serve (5.3).
+  - *Esito (20/10/2026): `requirements.txt` eliminato; gruppo dev `pytest` + `ruff`; `numpy` e `torch` dichiarate esplicitamente (import diretti). torch su Linux viene dall'indice CPU di PyTorch (`[tool.uv.sources]`), evitando i wheel CUDA da diversi GB in CI e nel deploy.*
+- [x] **8.2 Rinominare `setup.py`** in `bootstrap.py` (o `scripts/setup_index.py`): con un `pyproject.toml` presente, `setup.py` è il nome riservato al packaging setuptools e può essere eseguito per errore da `pip install .`.
+- [x] **8.3 Packaging `src/`** — trasformare `src/` in pacchetto (`fundscope/` con `__init__.py`), eliminare gli import che dipendono dalla cwd, il `sys.path` hack in `setup.py` e il fallback `RetrievedChunk` duplicato in `generate.py`.
+  - *Esito 8.2–8.3 (20/10/2026): layout src con pacchetto `src/fundscope/` (build hatchling, installato editable da `uv sync`); `setup.py` → `fundscope/bootstrap.py`; `metadata.json` → `src/fundscope/metadata.json`. Console script `fundscope` (agent), `fundscope-setup`, `fundscope-pipeline`; gli altri moduli con `python -m fundscope.<modulo>` (`python -m fundscope` = agent). Nessun `sys.path` hack (anche in `evaluation/` e `llm/cli.py`), nessun try/except sugli import delle dipendenze, fallback `RetrievedChunk` rimosso. Verifica: re-ingest identico a `data/processed/` (stessi file JSON byte per byte) e retrieval-only su 22 domande P 0.982 / R 0.989 / value recall 0.974.*
+- [x] **8.4 Logging** — sostituire i `print("[retrieve] …")` con `logging`, livello via `--verbose`; risolve anche il problema `UnicodeEncodeError` su Windows con stdout in pipe.
+  - *Esito (20/10/2026): `fundscope/log.py` (`add_verbose_flag`, `setup_logging`): diagnostica su stderr, livello WARNING (INFO con `-v/--verbose`), librerie terze silenziate; ogni CLI la chiama e riconfigura stdout/stderr in UTF-8. I messaggi `[retrieve]`/`[agent]`/`[generate]`/`[full]`/`[llm]` e gli avvisi di embed/ingest sono log; restano `print` solo gli output dei programmi (risposte, report, riepiloghi di ingest/embed). `retrieve --json` ora produce JSON pulito su stdout. Corretto anche un `SyntaxWarning` (regex non raw in `ingest.py`).*
+- [x] **8.5 Test (`tests/`)** con pytest:
   - unit: `_build_where`, `parse_citations`, `split_text`, `make_chunk_id`, scorer di `evaluate.py`;
   - ingest di un PDF di esempio → numero e metadati dei chunk;
   - retrieval end-to-end su indice temporaneo (senza LLM);
   - agent con client LLM **mockato** (sequenza tool call → risposta): nessuna chiamata di rete nei test;
   - conversione dei formati per **entrambi** i backend (neutro ↔ Anthropic, neutro ↔ OpenAI) con risposte registrate/finte, così il cambio di provider resta verificato anche senza chiavi;
   - calcolo dei costi e interruzione per budget (2.5).
-- [ ] **8.6 CI GitHub Actions** — su push: `uv sync`, `ruff`, test, valutazione retrieval-only; fallire se la recall scende sotto soglia. Nessuna chiave API in CI (la valutazione della generazione resta manuale).
-- [ ] **8.7 README** — riallineare il resto del README (la sezione "LLM provider" è già in 2.10): comandi (`uv run python src/...`, `src/metadata.json`, campo `isin` nell'esempio), architettura aggiornata, tabella risultati per modello, eventuali residui di Ollama e riferimenti a file inesistenti.
+  - *Esito (20/10/2026): 55 test in `tests/` (~1 min, nessuna chiamata di rete né chiave): `test_units.py`, `test_evaluate.py`, `test_ingest.py` (PDF generato dal test con `make_pdf`, più i 4 PDF reali se presenti: re-ingest = `data/processed/`), `test_retrieval.py` (indice ChromaDB temporaneo con `HashingEmbedder` al posto di e5), `test_agent.py` (`ScriptedLLM`: tool call → risposta citata, errori dei tool, limite di iterazioni, history), `test_llm.py` (conversioni neutro ↔ Anthropic e neutro ↔ OpenAI con risposte SDK finte, costi, budget). I test hanno trovato un bug in `split_text` con overlap 0 (`current[-0:]` duplicava l'intero chunk), corretto; con gli overlap in uso (150/180) l'output non cambia.*
+- [x] **8.6 CI GitHub Actions** — su push: `uv sync`, `ruff`, test, valutazione retrieval-only; fallire se la recall scende sotto soglia. Nessuna chiave API in CI (la valutazione della generazione resta manuale).
+  - *Esito (20/10/2026): `.github/workflows/ci.yml` — `uv sync --locked`, `ruff check .`, `pytest`. Decisione dell'utente: i PDF non vengono versionati, quindi lo step retrieval-only (`fundscope-setup --skip_llm_check` + `run_retrieval.py` + `evaluate.py --retrieval_only --min_recall 0.95`) gira solo se `data/raw/*.pdf` esistono (su GitHub viene saltato). Nuovo flag `evaluate.py --min_recall` (exit 1 sotto soglia).*
+- [x] **8.7 README** — riallineare il resto del README (la sezione "LLM provider" è già in 2.10): comandi (`uv run python src/...`, `src/metadata.json`, campo `isin` nell'esempio), architettura aggiornata, tabella risultati per modello, eventuali residui di Ollama e riferimenti a file inesistenti.
+  - *Esito (20/10/2026): comandi `uv run fundscope…` / `python -m fundscope.*`, architettura e struttura del pacchetto, tabella risultati per run (baseline 3.7, agent fase 4/5, full context), sezione Development (test, ruff, CI, `--verbose`), `LIVE_DATA_TTL_S`; nessun residuo di Ollama o di file inesistenti. Aggiornato anche CLAUDE.md.*
 
 ---
 

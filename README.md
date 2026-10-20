@@ -23,27 +23,28 @@ Built as a hands-on learning project to understand how RAG pipelines work end-to
 PDF files (factsheets + KIDs)
         │
         ▼
-  src/ingest.py          Extract text + tables, clean, chunk, tag metadata
+  fundscope.ingest       Extract text + tables, clean, chunk, tag metadata, key-facts chunk
         │
         ▼
   data/processed/        JSON files — one array of chunks per document
         │
         ▼
-  src/embed.py           Embed chunks with multilingual-e5-base, store in ChromaDB
+  fundscope.embed        Embed chunks with multilingual-e5-base, store in ChromaDB
         │
         ▼
   index/chroma_db/       Persisted vector store (local, no server needed)
         │
         ▼
-  src/retrieve.py        Hybrid search (vectors + BM25, fused with RRF) + metadata filtering
+  fundscope.retrieve     Hybrid search (vectors + BM25, fused with RRF) + metadata filtering
         │
         ▼
-  src/agent.py           Tool-calling agent: the LLM (through src/llm/) decides what to
+  fundscope.agent        Tool-calling agent: the LLM (through fundscope.llm) decides what to
                          search; answers cite [Chunk N], resolved to real metadata
-                         (src/ask.py is an alias)
 ```
 
-`src/generate.py` is the older fixed pipeline (retrieval routed by hand + one LLM call), still available for comparison as `pipeline.py --engine rag`.
+Two alternative engines are kept for comparison: `fundscope.generate` (the older fixed pipeline:
+retrieval routed by hand + one LLM call, `--engine rag`) and `fundscope.fullcontext` (no retrieval:
+every document in the prompt-cached system prompt, `--engine full`).
 
 Embeddings and retrieval run locally; only answer generation calls the LLM provider.
 
@@ -54,18 +55,22 @@ Embeddings and retrieval run locally; only answer generation calls the LLM provi
 ```
 FundScope/
 │
-├── src/
-│   ├── agent.py                  # Entrypoint — tool-calling agent (docs search + live market data)
+├── src/fundscope/                # The Python package (installed in editable mode by `uv sync`)
+│   ├── agent.py                  # Entrypoint (`fundscope`) — tool-calling agent: docs search + live data
 │   ├── ask.py                    # Alias of agent.py
+│   ├── bootstrap.py              # One-command setup (`fundscope-setup`): checks, ingest, index
 │   ├── citations.py              # [Chunk N] citations → real source metadata
-│   ├── config.py                 # Paths + LLM settings (reads .env)
+│   ├── config.py                 # Paths + settings (reads .env)
+│   ├── log.py                    # Logging setup shared by the CLIs (--verbose)
 │   ├── metadata.json             # Document registry (ISIN, name, issuer, year, doc type, Yahoo ticker)
 │   ├── registry.py               # Fund registry built from metadata.json (ISIN → name, issuer, ticker)
 │   ├── ingest.py                 # PDF extraction, cleaning, chunking
 │   ├── embed.py                  # Embedding + ChromaDB indexing
-│   ├── retrieve.py               # Semantic search + metadata filtering
-│   ├── generate.py               # Prompt templates + LLM call
-│   ├── pipeline.py               # End-to-end batch runner
+│   ├── retrieve.py               # Hybrid search + metadata filtering
+│   ├── live_data.py              # Market data from Yahoo Finance (disk cache)
+│   ├── generate.py               # Fixed RAG pipeline: prompt templates + LLM call (--engine rag)
+│   ├── fullcontext.py            # Full-context engine (--engine full)
+│   ├── pipeline.py               # Batch runner over the ground truth (`fundscope-pipeline`)
 │   └── llm/                      # Provider-neutral LLM layer
 │       ├── base.py               #   Message, ToolSpec, LLMResponse, LLMClient, cost tracker
 │       ├── anthropic_backend.py  #   Native Anthropic backend (default)
@@ -73,21 +78,26 @@ FundScope/
 │       ├── pricing.py            #   $ per million tokens, for cost estimates
 │       └── cli.py                #   --ping check
 │
+├── tests/                        # pytest suite — no network, no API key (LLM and embeddings mocked)
+│
 ├── data/
 │   ├── raw/                      # Original PDF files (not committed to git)
-│   └── processed/                # Chunk JSON files produced by ingest.py
+│   └── processed/                # Chunk JSON files produced by ingest
 │
 ├── index/
 │   └── chroma_db/                # Persisted ChromaDB vector store
 │
 ├── evaluation/
-│   ├── ground_truth.json         # 17 active Q&A pairs with expected answers
-│   ├── evaluate.py               # Scoring: precision, recall, faithfulness, attribution
+│   ├── ground_truth.json         # 22 Q&A pairs (17 English + 5 Italian) with expected values / rubrics
+│   ├── evaluate.py               # Scoring: retrieval, heuristics, attribution, LLM judge
+│   ├── judge.py                  # LLM-as-judge (one call per question)
+│   ├── run_retrieval.py          # Retrieval-only run (no LLM, no cost)
 │   ├── runs/                     # One JSON per pipeline run (with provider, model, cost)
-│   └── report.json               # Evaluation scores
+│   └── baseline_cloud.json, report_phase*.json   # Reference reports
 │
+├── .github/workflows/ci.yml      # CI: ruff + pytest on every push
 ├── .env.example                  # LLM provider configuration template
-└── pyproject.toml                # Dependencies (managed with uv)
+└── pyproject.toml                # Package, console scripts, dependencies (managed with uv)
 ```
 
 ---
@@ -102,7 +112,7 @@ Python 3.13 and [uv](https://docs.astral.sh/uv/) are required.
 uv sync
 ```
 
-This creates `.venv` with every dependency. Prefix commands with `uv run` (e.g. `uv run python src/ask.py`), or activate `.venv`.
+This creates `.venv` with every dependency and installs FundScope itself as the `fundscope` package (editable), with three commands: `fundscope` (the agent), `fundscope-setup` and `fundscope-pipeline`. Prefix commands with `uv run` (e.g. `uv run fundscope`), or activate `.venv`. The other modules run as `python -m fundscope.<module>` (e.g. `uv run python -m fundscope.retrieve --help`).
 
 ### LLM provider
 
@@ -119,7 +129,7 @@ cp .env.example .env
 3. Check that it works (a few tokens, a fraction of a cent):
 
 ```bash
-python src/llm/cli.py --ping
+uv run python -m fundscope.llm.cli --ping
 # [ping] anthropic / claude-haiku-4-5-20251001 → 'pong'
 # [ping] tokens in=15 out=5  cost=$0.000040
 ```
@@ -139,8 +149,9 @@ python src/llm/cli.py --ping
 | `GROQ_API_KEY` / `GEMINI_API_KEY` / `OPENROUTER_API_KEY` | — | Key for that provider; only the one in use is needed |
 | `LLM_MAX_COST_USD` | `0.50` | Budget per run: a run stops (keeping its partial results) once the estimated cost reaches it |
 | `LLM_MIN_INTERVAL_S` | `0` | Minimum seconds between two LLM calls (for free tiers with low request limits) |
+| `LIVE_DATA_TTL_S` | `3600` | Seconds Yahoo Finance answers stay cached in `data/cache/live_data/` (`0` disables) |
 
-Precedence: **CLI flags** (`--provider`, `--model`) > **environment / `.env`** > **defaults in `src/config.py`**.
+Precedence: **CLI flags** (`--provider`, `--model`) > **environment / `.env`** > **defaults in `src/fundscope/config.py`**.
 
 #### Switching provider
 
@@ -180,27 +191,27 @@ OPENROUTER_API_KEY=sk-or-...
 (Model names for non-Anthropic providers are examples — check the provider's model list.) For a single run, override from the CLI instead:
 
 ```bash
-python src/ask.py --provider groq --model llama-3.3-70b-versatile
-python src/llm/cli.py --ping --provider gemini --model gemini-2.5-flash
+uv run fundscope --provider groq --model llama-3.3-70b-versatile
+uv run python -m fundscope.llm.cli --ping --provider gemini --model gemini-2.5-flash
 ```
 
-`ask.py`, `agent.py`, `pipeline.py` and `generate.py` all accept `--provider` and `--model`.
+`fundscope`, `fundscope-pipeline`, `fundscope.generate` and `fundscope.fullcontext` all accept `--provider` and `--model`.
 
 #### Adding a new provider
 
-- **OpenAI-compatible API** (most providers): add one line to `OPENAI_COMPAT_PROVIDERS` in `src/llm/openai_compat.py`, e.g. `"mistral": "https://api.mistral.ai/v1"`. The key is then read from `MISTRAL_API_KEY`, and `LLM_PROVIDER=mistral` works.
-- **Anything else**: write a new backend in `src/llm/` that subclasses `LLMClient` and implements `_chat(messages, *, system, tools, temperature, max_tokens) -> LLMResponse` (converting the neutral `Message` / `ToolSpec` types to the provider's format), then hook it into `get_llm()` in `src/llm/__init__.py`.
+- **OpenAI-compatible API** (most providers): add one line to `OPENAI_COMPAT_PROVIDERS` in `src/fundscope/llm/openai_compat.py`, e.g. `"mistral": "https://api.mistral.ai/v1"`. The key is then read from `MISTRAL_API_KEY`, and `LLM_PROVIDER=mistral` works.
+- **Anything else**: write a new backend in `src/fundscope/llm/` that subclasses `LLMClient` and implements `_chat(messages, *, system, tools, temperature, max_tokens) -> LLMResponse` (converting the neutral `Message` / `ToolSpec` types to the provider's format), then hook it into `get_llm()` in `src/fundscope/llm/__init__.py`.
 
-Optionally add the model's prices to `src/llm/pricing.py`; models without a price still work, their cost is just reported as unknown.
+Optionally add the model's prices to `src/fundscope/llm/pricing.py`; models without a price still work, their cost is just reported as unknown.
 
 #### Costs
 
-Indicative prices (per million tokens, input / output): Claude Haiku 4.5 $1 / $5, Claude Sonnet 5.5 $2 / $10. A typical answer uses ~1,000 input and ~100–350 output tokens, i.e. **≈ $0.001–0.003 per question**; the full 17-question evaluation costs ≈ $0.03 with Haiku 4.5.
+Indicative prices (per million tokens, input / output): Claude Haiku 4.5 $1 / $5, Claude Sonnet 5.5 $2 / $10. A typical answer uses ~1,000 input and ~100–350 output tokens, i.e. **≈ $0.001–0.003 per question**; a full 22-question agent run costs ≈ $0.15 and judging it ≈ $0.20 (see Results).
 
-- `--show_cost` on `ask.py` / `agent.py` prints the tokens and estimated cost of every answer.
-- `pipeline.py` and `evaluate.py` print the run total (pipeline + judge); each run file stores per-question and total tokens and cost.
+- `--show_cost` on `fundscope` prints the tokens and estimated cost of every answer.
+- `fundscope-pipeline` and `evaluate.py` print the run total (pipeline + judge); each run file stores per-question and total tokens and cost.
 - `LLM_MAX_COST_USD` caps what one run can spend.
-- `pipeline.py --limit N` / `--qids T1_001 T2_003` run only a subset — use them while developing.
+- `fundscope-pipeline --limit N` / `--qids T1_001 T2_003` run only a subset — use them while developing.
 
 ---
 
@@ -208,7 +219,7 @@ Indicative prices (per million tokens, input / output): Claude Haiku 4.5 $1 / $5
 
 ### Step 1 — Add your PDF documents
 
-Place your ETF factsheets and KIDs in `data/raw/`. Then register each file in `src/metadata.json`:
+Place your ETF factsheets and KIDs in `data/raw/`. Then register each file in `src/fundscope/metadata.json`:
 
 ```json
 {
@@ -227,30 +238,30 @@ Place your ETF factsheets and KIDs in `data/raw/`. Then register each file in `s
 }
 ```
 
-`name` and `yahoo_ticker` are fund-level fields: repeat them identically on every document of the same ISIN (`src/registry.py` groups the documents by ISIN and rejects inconsistent entries; `python src/registry.py` prints the resulting fund list).
+`name` and `yahoo_ticker` are fund-level fields: repeat them identically on every document of the same ISIN (`src/fundscope/registry.py` groups the documents by ISIN and rejects inconsistent entries; `uv run python -m fundscope.registry` prints the resulting fund list).
 
 Supported issuers: `ishares`, `ubs`, `xtrackers`, `amundi`. Document types: `factsheet`, `kid`.
 
 ### Step 2 — Run setup
 
 ```bash
-python setup.py
+uv run fundscope-setup
 ```
 
 This single command checks the dependencies, the PDFs and the LLM provider (key present + a minimal `--ping`), ingests your PDFs, and builds the vector index.
-Once it completes, `ask.py` is ready to use.
+Once it completes, `fundscope` is ready to use.
 
 **Options:**
 
 ```bash
 # Force full rebuild of the index (e.g. after changing chunk size or adding documents)
-python setup.py --rebuild
+uv run fundscope-setup --rebuild
 
 # Skip ingestion if data/processed/ is already populated
-python setup.py --skip_ingest
+uv run fundscope-setup --skip_ingest
 
 # Skip the LLM provider check (no API call)
-python setup.py --skip_llm_check
+uv run fundscope-setup --skip_llm_check
 ```
 
 If no provider key is configured (or the ping fails), setup still completes and builds the index.
@@ -263,10 +274,10 @@ You can use retrieval-only evaluation without a model — see the Evaluation sec
 ### Interactive mode (recommended)
 
 ```bash
-python src/ask.py
+uv run fundscope
 ```
 
-This opens a prompt where you type questions in plain English (`ask.py` and `agent.py` are the same program). The LLM agent decides which funds, documents and retrieval mode to search, searches again with other wording if the first results miss the answer, and cites the chunks it used; the code turns each `[Chunk N]` citation into the real source metadata. Follow-up questions work: the last 5 questions and answers are remembered until you type `reset`.
+This opens a prompt where you type questions in plain English (`fundscope` runs `fundscope.agent`; `fundscope.ask` is an alias). The LLM agent decides which funds, documents and retrieval mode to search, searches again with other wording if the first results miss the answer, and cites the chunks it used; the code turns each `[Chunk N]` citation into the real source metadata. Follow-up questions work: the last 5 questions and answers are remembered until you type `reset`.
 
 ```
 ════════════════════════════════════════════════════════════════
@@ -305,13 +316,13 @@ Available commands inside the prompt:
 ### Single question mode
 
 ```bash
-python src/ask.py --query "What is the Summary Risk Indicator of IE00B4L5Y983?" --show_cost
+uv run fundscope --query "What is the Summary Risk Indicator of IE00B4L5Y983?" --show_cost
 ```
 
 ### With source chunk inspection
 
 ```bash
-python src/ask.py --query "Compare the replication methods of both ETFs" --show_chunks
+uv run fundscope --query "Compare the replication methods of both ETFs" --show_chunks
 ```
 
 This prints the retrieved chunks before the answer, showing exactly what the model was given — useful for understanding why an answer is correct or incorrect.
@@ -319,7 +330,7 @@ This prints the retrieved chunks before the answer, showing exactly what the mod
 ### Tool calls and live data
 
 ```bash
-python src/agent.py --query "How has the iShares Core MSCI World ETF performed this year?" --show_calls --show_cost
+uv run fundscope --query "How has the iShares Core MSCI World ETF performed this year?" --show_calls --show_cost
 ```
 
 The model decides which tools to call: document search (`search_etf_docs`, with optional ISINs, issuer, document type, year and mode — single, comparative or cross-document), live market data (yfinance), or the list of available ETFs. `--show_calls` prints each call.
@@ -327,7 +338,7 @@ The model decides which tools to call: document search (`search_etf_docs`, with 
 ### Specifying a different provider or model
 
 ```bash
-python src/ask.py --provider groq --model llama-3.3-70b-versatile
+uv run fundscope --provider groq --model llama-3.3-70b-versatile
 ```
 
 ---
@@ -364,22 +375,22 @@ To measure how well the system retrieves and answers questions against the groun
 # Run the agent over all 22 active ground truth questions (17 in English, 5 in Italian;
 # it sees only the question text).
 # Output: evaluation/runs/<UTC timestamp>_<model>_agent.json (never overwritten)
-python src/pipeline.py --run_eval
+uv run fundscope-pipeline --run_eval
 
 # The older fixed pipeline, with retrieval routed by the ground-truth hints
 # Output: evaluation/runs/<UTC timestamp>_<model>.json
-python src/pipeline.py --run_eval --engine rag
+uv run fundscope-pipeline --run_eval --engine rag
 
 # No retrieval: every document in the (cached) prompt, for comparison
 # Output: evaluation/runs/<UTC timestamp>_<model>_full.json
-python src/pipeline.py --run_eval --engine full
+uv run fundscope-pipeline --run_eval --engine full
 
 # While developing, run a subset to keep the cost low
-python src/pipeline.py --run_eval --limit 3
-python src/pipeline.py --run_eval --qids T1_001 T2_003
+uv run fundscope-pipeline --run_eval --limit 3
+uv run fundscope-pipeline --run_eval --qids T1_001 T2_003
 
 # Score a run (pass the same --limit / --qids if the run was a subset)
-python evaluation/evaluate.py \
+uv run python evaluation/evaluate.py \
     --ground_truth evaluation/ground_truth.json \
     --pipeline_output evaluation/runs/<run>.json \
     --report evaluation/report.json
@@ -396,7 +407,7 @@ Each run file has the form `{"run": {provider, model, timestamps, status, totals
 
 ```bash
 # Score with the judge and compare with the official baseline
-python evaluation/evaluate.py \
+uv run python evaluation/evaluate.py \
     --ground_truth evaluation/ground_truth.json \
     --pipeline_output evaluation/runs/<run>.json \
     --report evaluation/report.json \
@@ -408,27 +419,74 @@ The official baseline is `evaluation/baseline_cloud.json` (Haiku 4.5 answers jud
 ### Retrieval only (no LLM, no cost)
 
 ```bash
-python evaluation/run_retrieval.py
-python evaluation/evaluate.py \
+uv run python evaluation/run_retrieval.py
+uv run python evaluation/evaluate.py \
     --ground_truth evaluation/ground_truth.json \
     --pipeline_output evaluation/runs/<timestamp>_retrieval-only.json \
     --retrieval_only
 ```
 
-The report breaks down scores by query type (factual, comparative, synthetic) and difficulty (easy, medium, hard).
+The report breaks down scores by query type (factual, comparative, synthetic), difficulty (easy, medium, hard) and language. Add `--min_recall 0.95` to exit with an error when the mean retrieval recall falls below it (used by CI).
 
 ---
 
 ## Adding more ETFs
 
 1. Place the new PDF files in `data/raw/`
-2. Add entries to `src/metadata.json` (one per PDF, with the fund-level fields `name` and `yahoo_ticker` repeated identically on every document of the same ISIN). `src/registry.py` builds the fund list from this file, so the agent tools, `ask.py` and `live_data.py` pick up the new fund automatically
+2. Add entries to `src/fundscope/metadata.json` (one per PDF, with the fund-level fields `name` and `yahoo_ticker` repeated identically on every document of the same ISIN). `src/fundscope/registry.py` builds the fund list from this file, so the agent tools and `live_data.py` pick up the new fund automatically
 3. Re-run ingest, embed (without `--rebuild`), and you are ready to ask questions about the new fund
 
 ```bash
-python src/ingest.py --batch data/raw/ --config src/metadata.json --output_dir data/processed/
-python src/embed.py --input_dir data/processed/ --db_path index/chroma_db/
+uv run python -m fundscope.ingest --batch data/raw/ --config src/fundscope/metadata.json --output_dir data/processed/
+uv run python -m fundscope.embed --input_dir data/processed/ --db_path index/chroma_db/
 ```
+
+---
+
+## Results
+
+All runs use Claude Haiku 4.5 as the generator and Claude Sonnet 5.5 as the judge (`--judge llm`).
+"Pass" is the judge verdict, "correct" its correctness score (correct = 1, partial = ½),
+"grounded" the share of answers whose claims are all supported by the retrieved context.
+
+| Run | Engine | Questions | Pass | Correct | Grounded | Attribution | Retrieval P / R | Cost (run + judge) |
+|---|---|---|---|---|---|---|---|---|
+| `baseline_cloud.json` (phase 3) | fixed RAG | 17 EN | 35.3% | 46.7% | 82.4% | 0.88 | 0.99 / 1.00 | $0.03 + $0.09 |
+| `report_phase4_agent.json` | agent | 17 EN | 70.6% | 83.3% | 76.5% | 0.82 | 0.85 / 0.94 | $0.21 + $0.13 |
+| `report_phase5_agent.json` | agent | 22 (17 EN + 5 IT) | 68.2% | 92.5% | 72.7% | 0.91 | 0.78 / 0.96 | $0.15 + $0.20 |
+| `report_phase5_full.json` | full context | 22 (17 EN + 5 IT) | 81.8% | 95.0% | 86.4% | 0.95 | 0.43 / 1.00 | $0.07 + $0.22 |
+
+The agent fixed most of the baseline's failures (abstentions: the right document was retrieved
+but not the chunk holding the value). Its remaining misses are mostly on groundedness: Haiku adds
+explanations the documents do not contain. On this small corpus (~15k tokens) giving the model
+every document is both better and cheaper; retrieval is expected to pay off as the corpus grows.
+Retrieval precision is lower for the agent and full context by design: they look at more documents
+than the minimum the question needs.
+
+---
+
+## Development
+
+```bash
+uv sync                     # also installs pytest and ruff (dev group)
+uv run ruff check .         # lint
+uv run pytest -q            # ~55 tests, ~1 min; no network, no API key
+```
+
+The tests never call an LLM or download a model: the embedding model is replaced by a hashing
+embedder (a temporary ChromaDB index is built from a handful of chunks), the agent runs against a
+scripted `LLMClient`, and both provider backends are checked against canned SDK responses (neutral
+format ↔ Anthropic, neutral ↔ OpenAI), so switching provider stays verified without keys. Ingestion
+is tested on a PDF generated by the test itself; when the corpus PDFs are present in `data/raw/`,
+re-ingesting them must reproduce `data/processed/` chunk for chunk.
+
+CI (`.github/workflows/ci.yml`) runs `uv sync --locked`, ruff and pytest on every push. The corpus
+PDFs are not versioned, so the retrieval-only evaluation step (`evaluate.py --retrieval_only
+--min_recall 0.95`) only runs where `data/raw/` holds them. Generation is evaluated by hand, since
+it costs API credit.
+
+Every command accepts `--verbose` (`-v`) to log progress and diagnostics to stderr; stdout carries
+only the program output.
 
 ---
 
@@ -440,11 +498,11 @@ python src/embed.py --input_dir data/processed/ --db_path index/chroma_db/
 
 **Why hybrid search?** Embeddings rank exact tokens poorly: ISINs, acronyms (TER, OCF, SRI) and figures. Each search also ranks the same filtered chunks with BM25 and fuses the two rankings with Reciprocal Rank Fusion (BM25 weight 0.5). The agent then drops chunks below a per-model similarity threshold (`config.MIN_SIMILARITY`) and tells the model how many it discarded.
 
-**Why a cloud LLM behind a neutral interface?** Small local models struggled with multi-document reasoning and tool calling. All code outside `src/llm/` talks only to `LLMClient` and its neutral types, so the provider is a configuration choice: Anthropic uses its native SDK (prompt caching, reliable tool use), every other provider goes through one generic OpenAI-compatible backend.
+**Why a cloud LLM behind a neutral interface?** Small local models struggled with multi-document reasoning and tool calling. All code outside `src/fundscope/llm/` talks only to `LLMClient` and its neutral types, so the provider is a configuration choice: Anthropic uses its native SDK (prompt caching, reliable tool use), every other provider goes through one generic OpenAI-compatible backend.
 
 **Chunk size:** factsheets use 1000-character chunks, KIDs 1200, with 15% overlap. Factsheets have a two-column layout that interleaves a label ("Product Structure :") with text from the other column; small chunks (250 characters) often separated a value from its label. A sweep measured with the chunk value recall of `evaluation/run_retrieval.py` went from 0.71 (250/400) to 1.00 (1000/1200). Tables are kept whole and never split, and each document gets a "key facts" chunk built from label patterns (TER, replication, SRI, costs).
 
-**Full-context comparison:** the whole 2026 corpus is ~15k tokens, so `pipeline.py --engine full` answers with every document in the prompt (prompt-cached: later questions read it at a tenth of the input price). It measures what retrieval adds compared with giving the model everything.
+**Full-context comparison:** the whole 2026 corpus is ~15k tokens, so `fundscope-pipeline --engine full` answers with every document in the prompt (prompt-cached: later questions read it at a tenth of the input price). It measures what retrieval adds compared with giving the model everything.
 
 **Three retrieval modes:**
 - `single` — one vector search with optional metadata filter (Type 1)
